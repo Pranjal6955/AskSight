@@ -1,0 +1,13 @@
+node_modules/
+.expo/
+dist/
+coverage/
+web-build/
+expo-env.d.ts
+nativewind-env.d.ts
+package-lock.json
+ios/
+android/
+
+# Expo-generated icon config (would drift on every regeneration)
+assets/expo.icon/
