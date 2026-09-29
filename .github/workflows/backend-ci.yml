@@ -1,0 +1,77 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      # ruff never resolves imports, so the runtime dependencies are not needed
+      # for this job. Installing only ruff keeps it fast.
+      - name: Install ruff
+        run: pip install -r requirements-dev.txt
+
+      - name: Check lint
+        run: ruff check .
+
+      - name: Check formatting
+        run: ruff format --check .
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      # No DATABASE_URL is set on purpose. conftest.py builds the TestClient
+      # without entering the context manager, so the FastAPI lifespan never
+      # runs prisma.connect() and the suite stays database-independent.
+      #
+      # The Prisma client is not generated either: the current tests only
+      # exercise routes and never touch models. Once DB-backed tests land,
+      # add `prisma generate` here (it downloads the query engine binaries).
+      - name: Run tests
+        run: pytest -q --junitxml=reports/pytest.xml
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-report-${{ github.run_id }}
+          path: backend/reports
+          if-no-files-found: ignore

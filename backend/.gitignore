@@ -5,5 +5,13 @@ node_modules
 # Python
 __pycache__/
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
+
+# Local virtualenv (venv/ also self-ignores via its own .gitignore)
+.venv/
+venv/
+
+# Test reports
+reports/

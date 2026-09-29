@@ -1,2 +1,3 @@
-pytest>=9.1
-ruff
+# Pinned so a CI failure means a code change, not a new upstream release.
+pytest==9.1.1
+ruff==0.16.9
