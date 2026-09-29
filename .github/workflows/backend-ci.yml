@@ -58,13 +58,24 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      # Required. The generator writes prisma/models.py, prisma/partials.py and
+      # friends into the installed `prisma` package (site-packages), not into
+      # this repo, so the client is a build artifact that never reaches git.
+      # Without it, `from prisma import Prisma` raises:
+      #   RuntimeError: The Client hasn't been generated yet...
+      # The generator shell-outs to the `prisma-client-py` console script, so
+      # the interpreter's scripts directory has to be on PATH. pip already put
+      # it there under setup-python; export it explicitly so this step does not
+      # depend on that being true.
+      - name: Generate Prisma client
+        run: |
+          export PATH="$(python -c 'import sysconfig; print(sysconfig.get_path("scripts"))'):$PATH"
+          command -v prisma-client-py
+          prisma generate
+
       # No DATABASE_URL is set on purpose. conftest.py builds the TestClient
       # without entering the context manager, so the FastAPI lifespan never
       # runs prisma.connect() and the suite stays database-independent.
-      #
-      # The Prisma client is not generated either: the current tests only
-      # exercise routes and never touch models. Once DB-backed tests land,
-      # add `prisma generate` here (it downloads the query engine binaries).
       - name: Run tests
         run: pytest -q --junitxml=reports/pytest.xml
 
