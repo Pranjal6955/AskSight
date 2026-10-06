@@ -1,0 +1,31 @@
+# Per-package ignores live in backend/.gitignore and ui/.gitignore.
+# This file only covers repo-wide tooling and editor noise.
+
+# OS
+.DS_Store
+
+# Editors
+.idea/
+*.swp
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Python virtualenvs (backend/venv/ is also self-ignored by its own .gitignore)
+.venv/
+venv/
+.env
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+
+# Build / type output
+dist/
+build/
+*.tsbuildinfo
+coverage/
