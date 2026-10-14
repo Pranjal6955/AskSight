@@ -1,8 +1,9 @@
-from fastapi import Depends,HTTPException
-from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
 import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
-from app.core.security import SECRET_KEY, ALGORITHM
+
+from app.core.security import ALGORITHM, SECRET_KEY
 from app.db import db
 
 bearer_schema = HTTPBearer()
@@ -21,8 +22,8 @@ async def get_current_user(credentials : HTTPAuthorizationCredentials = Depends(
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-    except InvalidTokenError:
-        raise HTTPException(status_code=401,detail = "Invaild or expired token")
+    except InvalidTokenError as err:
+        raise HTTPException(status_code=401,detail = "Invaild or expired token") from err
     
     user = await db.user.find_unique(where={"id":user_id})
     if not user:

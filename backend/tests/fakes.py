@@ -1,7 +1,8 @@
 """In-memory stand-in for `app.db.db`. No Postgres needed."""
-from datetime import datetime, timezone
-from types import SimpleNamespace
+
+from datetime import UTC, datetime
 from itertools import count
+from types import SimpleNamespace
 
 _ids = count(1)
 
@@ -25,7 +26,7 @@ class FakeUserDelegate:
             name=data["name"],
             email=data["email"],
             password=data["password"],
-            createdAt=datetime.now(timezone.utc),
+            createdAt=datetime.now(UTC),
         )
         self.users[user.id] = user
         return user

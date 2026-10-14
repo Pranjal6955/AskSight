@@ -39,7 +39,10 @@ class TestLoginRequest(unittest.TestCase):
 class TestUserResponse(unittest.TestCase):
     def test_rejects_password_field_leakage(self):
         user = UserResponse(
-            id="u1", name="Ada", email="a@b.com", createdAt="2024-01-01T00:00:00",
+            id="u1",
+            name="Ada",
+            email="a@b.com",
+            createdAt="2024-01-01T00:00:00",
             password="hashed-secret",
         )
         self.assertNotIn("password", user.model_dump())

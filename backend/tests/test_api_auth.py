@@ -92,16 +92,21 @@ class TestLogin(AuthApiTestCase):
         self.assertEqual(res.status_code, 401)
 
     def test_rejects_unknown_email_with_401(self):
-        res = self.client.post("/auth/login", json={"email": "nobody@example.com", "password": PASSWORD})
+        res = self.client.post(
+            "/auth/login", json={"email": "nobody@example.com", "password": PASSWORD}
+        )
         self.assertEqual(res.status_code, 401)
 
     def test_rejects_invalid_payload_with_422(self):
         self.assertEqual(
-            self.client.post("/auth/login", json={"email": "nope", "password": "x"}).status_code, 422
+            self.client.post("/auth/login", json={"email": "nope", "password": "x"}).status_code,
+            422,
         )
 
     def test_does_not_leak_whether_email_exists(self):
-        unknown = self.client.post("/auth/login", json={"email": "nobody@example.com", "password": "x"})
+        unknown = self.client.post(
+            "/auth/login", json={"email": "nobody@example.com", "password": "x"}
+        )
         wrong = self.client.post("/auth/login", json={"email": SIGNUP["email"], "password": "x"})
         self.assertEqual(unknown.json(), wrong.json())
 
@@ -130,7 +135,8 @@ class TestMe(AuthApiTestCase):
 
     def test_rejects_garbage_token_with_401(self):
         self.assertEqual(
-            self.client.get("/auth/me", headers={"Authorization": "Bearer garbage"}).status_code, 401
+            self.client.get("/auth/me", headers={"Authorization": "Bearer garbage"}).status_code,
+            401,
         )
 
     def test_rejects_token_for_deleted_user_with_401(self):

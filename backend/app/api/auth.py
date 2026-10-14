@@ -1,8 +1,9 @@
-from fastapi import APIRouter,status, HTTPException, Depends
-from app.schema.auth import SignupRequest, UserResponse, LoginRequest
-from app.db import db
-from app.core.security import hash_password, verify_password, create_access_token
+from fastapi import APIRouter, Depends, HTTPException, status
+
 from app.core.dependencies import get_current_user
+from app.core.security import create_access_token, hash_password, verify_password
+from app.db import db
+from app.schema.auth import LoginRequest, SignupRequest, UserResponse
 
 router = APIRouter(prefix = "/auth",tags=["Authentication"])
 

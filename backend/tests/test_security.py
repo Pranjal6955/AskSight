@@ -4,8 +4,8 @@ import unittest
 import jwt
 
 from app.core.security import (
-    ALGORITHM,
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
     SECRET_KEY,
     create_access_token,
     hash_password,
