@@ -1,8 +1,7 @@
 from fastapi import APIRouter,status, HTTPException
-from app.schema.auth import SignupRequest, UserResponse
+from app.schema.auth import SignupRequest, UserResponse, LoginRequest
 from app.db import db
-from app.core.security import hash_password
-
+from app.core.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix = "/auth",tags=["Authentication"])
 
@@ -41,3 +40,20 @@ async def signup(payload:SignupRequest):
         email = user.email,
         createdAt = user.createdAt,
     )
+
+@router.post("/login")
+async def login(payload:LoginRequest):
+    email = str(payload.email).strip().lower()
+    user = await db.user.find_unique(where={"email":email})
+
+    if not user or not verify_password(
+        payload.password, user.password
+    ):
+        raise HTTPException(status_code = 401, detail = "Invalid email or Password")
+
+    access_token = create_access_token(user.id)
+
+    return {
+        "access_token":access_token,
+        "token_type":"bearer",
+    }
