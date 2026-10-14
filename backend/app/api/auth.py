@@ -1,7 +1,9 @@
-from fastapi import APIRouter,status, HTTPException
+from anyio.lowlevel import D
+from fastapi import APIRouter,status, HTTPException, Depends
 from app.schema.auth import SignupRequest, UserResponse, LoginRequest
 from app.db import db
 from app.core.security import hash_password, verify_password, create_access_token
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix = "/auth",tags=["Authentication"])
 
@@ -57,3 +59,12 @@ async def login(payload:LoginRequest):
         "access_token":access_token,
         "token_type":"bearer",
     }
+
+@router.get("/me",response_model=UserResponse)
+async def get_me(current_user = Depends(get_current_user)):
+    return UserResponse(
+        id = current_user.id,
+        name = current_user.name,
+        email = current_user.email,
+        createdAt= current_user.createdAt,
+    )
