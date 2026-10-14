@@ -1,4 +1,5 @@
 from pwdlib import PasswordHash
+from pwdlib.exceptions import UnknownHashError
 import os
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -13,7 +14,10 @@ def hash_password(password : str) -> str:
     return passwordHash.hash(password)
 
 def verify_password(plain_password:str, hash_password:str) -> bool:
-    return passwordHash.verify(plain_password,hash_password)
+    try:
+        return passwordHash.verify(plain_password,hash_password)
+    except UnknownHashError:
+        return False
 
 def create_access_token(user_id : str) -> str:
     expires_at = datetime.now(timezone.utc) + timedelta(

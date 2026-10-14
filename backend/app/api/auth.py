@@ -1,4 +1,3 @@
-from anyio.lowlevel import D
 from fastapi import APIRouter,status, HTTPException, Depends
 from app.schema.auth import SignupRequest, UserResponse, LoginRequest
 from app.db import db
