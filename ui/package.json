@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@expo/ui": "~57.0.20",
+    "@expo/vector-icons": "^15.0.2",
     "babel-preset-expo": "~57.0.0",
     "expo": "~57.0.25",
     "expo-constants": "~57.0.19",
@@ -59,7 +60,7 @@
   "jest": {
     "preset": "jest-expo",
     "transformIgnorePatterns": [
-      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|nativewind|react-native-css-interop)"
+      "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|nativewind|react-native-css-interop|standard-navigation)"
     ]
   },
   "private": true
