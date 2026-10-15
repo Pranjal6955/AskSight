@@ -5,7 +5,9 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-py"
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
 }
 
 datasource db {
@@ -13,11 +15,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Minimal model so `prisma generate` succeeds.
-// Used for session history (README: "answer is logged").
-model QueryLog {
-  id        Int      @id @default(autoincrement())
-  question  String
-  answer    String?
+model User {
+  id String @id @default(cuid())
+  name String 
+  email String @unique
+  password String
   createdAt DateTime @default(now())
+
 }

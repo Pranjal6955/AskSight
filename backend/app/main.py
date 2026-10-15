@@ -1,26 +1,20 @@
 from contextlib import asynccontextmanager
 
-# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
 
-from app.db.prisma import prisma
+from app.api.auth import router as auth_router
+from app.db import db
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    await prisma.connect()
+async def lifespan(app : FastAPI):
+    # Startup : Connect to DB
+    await db.connect()
     yield
-    if prisma.is_connected():
-        await prisma.disconnect()
+    #Shutdown : Disconnected from DB
+    await db.disconnect()
 
+app = FastAPI(lifespan=lifespan)
 
-app = FastAPI(
-    title="AskSight Backend",
-    version="1.0",
-    lifespan=lifespan,
-)
+app.include_router(auth_router)
 
-
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
