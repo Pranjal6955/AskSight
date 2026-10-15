@@ -71,10 +71,10 @@ test("renders the three ask actions from the design", async () => {
   expect(screen.getByText("Ask with Voice")).toBeOnTheScreen();
   expect(screen.getByText("Ask with Text")).toBeOnTheScreen();
   expect(
-    screen.getByText("Take a photo and get an AI description"),
+    screen.getByText("Take a photo and get an AI description of your surroundings"),
   ).toBeOnTheScreen();
-  expect(screen.getByText("Speak your question")).toBeOnTheScreen();
-  expect(screen.getByText("Type your question")).toBeOnTheScreen();
+  expect(screen.getByText("Speak your question and hear the response")).toBeOnTheScreen();
+  expect(screen.getByText("Type your question and read the response")).toBeOnTheScreen();
 });
 
 test("shows the Home, History and Settings tabs", async () => {

@@ -1,3 +1,61 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dark theme color overrides */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #1A1A1A;
+    --color-ink: #FFFFFF;
+    --color-muted: #D1D5DB;
+    --color-hint: #9CA3AF;
+    --color-field: #2D2D2D;
+    --color-field-border: #4B5563;
+    --color-card-green: #0F2E1E;
+    --color-card-orange: #2E1E0A;
+    --color-card-grey: #2D2D2D;
+    --color-tile-green: #0A5C3F;
+    --color-tile-orange: #CC6600;
+    --color-tile-grey: #4B5563;
+    --color-avatar: #0F2E1E;
+    --color-accent: #F97316;
+    --color-error: #F97316;
+    --color-focus: #4ADE80;
+    --color-mint: #0F2E1E;
+    --color-peach: #2E1E0A;
+    --color-brand-link: #6EE7B7;
+  }
+}
+
+/* Focus visible styles for keyboard navigation */
+*:focus-visible {
+  outline: 3px solid var(--color-focus, #08513F);
+  outline-offset: 2px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  :root {
+    --color-hint: #3C424D;
+    --color-muted: #1F272E;
+    --color-field-border: #000000;
+  }
+}
+
+/* Touch target minimum sizing */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+}

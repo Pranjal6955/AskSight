@@ -63,24 +63,27 @@ export default function SignupScreen() {
         >
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel="Go back to sign in"
             onPress={() => router.back()}
-            hitSlop={8}
-            className="self-start"
+            hitSlop={12}
+            className="self-start touch-target items-center justify-center"
           >
             <MaterialCommunityIcons
               name="chevron-left"
               size={28}
               color="#0A4034"
+              importantForAccessibility="no-hide-descendants"
             />
           </Pressable>
 
-          <Text className="mt-6 text-4xl font-bold text-ink">
-            Create your account
-          </Text>
-          <Text className="mt-2 text-base text-muted">
-            Join AskSight and start exploring
-          </Text>
+          <View className="mt-6" accessibilityLiveRegion="polite">
+            <Text className="text-4xl font-bold text-ink" accessibilityRole="header">
+              Create your account
+            </Text>
+            <Text className="mt-2 text-base text-muted">
+              Join AskSight and start exploring
+            </Text>
+          </View>
 
           <View className="mt-8 gap-4">
             <AuthField
@@ -120,20 +123,13 @@ export default function SignupScreen() {
           </View>
 
           {error ? (
-            <Text
-              className="mt-4 text-sm text-accent"
-              accessibilityLiveRegion="polite"
-            >
+            <Text className="mt-4 text-sm text-error" accessibilityLiveRegion="assertive" role="alert">
               {error}
             </Text>
           ) : null}
 
           <View className="mt-8">
-            <PrimaryButton
-              label="Create account"
-              loading={loading}
-              onPress={onSubmit}
-            />
+            <PrimaryButton label="Create account" loading={loading} onPress={onSubmit} />
           </View>
 
           <View className="mt-6 gap-6">
@@ -143,7 +139,7 @@ export default function SignupScreen() {
 
           <Text className="mt-8 text-center text-sm text-muted">
             Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-brand-link">
+            <Link href="/login" className="font-semibold text-brand-link underline" accessibilityLabel="Sign in to your existing account">
               Sign in
             </Link>
           </Text>

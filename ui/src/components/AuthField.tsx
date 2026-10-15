@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useState, type ComponentProps } from "react";
+import { useState, type ComponentProps, useId } from "react";
 import {
   Pressable,
   Text,
@@ -27,8 +27,6 @@ type FieldProps = Pick<
   error?: string | null;
 };
 
-// The mock draws the empty state: the label sits in ink inside the box and the
-// hint sits under it in grey. Once there is a value only the input remains.
 export function AuthField({
   label,
   hint,
@@ -39,46 +37,69 @@ export function AuthField({
   ...inputProps
 }: FieldProps) {
   const [hidden, setHidden] = useState(Boolean(secureTextEntry));
-  const empty = !inputProps.value;
+  const hintId = useId();
+  const errorId = useId();
+  const hasError = Boolean(error);
 
   return (
     <View>
-      <View className="flex-row items-center rounded-field bg-field px-4 py-3">
-        <MaterialCommunityIcons name={icon} size={22} color="#3C424D" />
+      {/* Visible label - required for accessibility */}
+      <Text className="text-sm font-semibold text-ink mb-1" accessibilityLiveRegion="polite">
+        {label}
+      </Text>
+
+      <View className="flex-row items-center rounded-field bg-field px-4 py-3 touch-target">
+        <MaterialCommunityIcons
+          name={icon}
+          size={22}
+          color="#5C6168"
+          importantForAccessibility="no-hide-descendants"
+        />
         <View className="ml-3 flex-1">
           <TextInput
             {...inputProps}
             editable={editable}
-            placeholder={label}
-            placeholderTextColor="#000000"
+            placeholder={hint}
+            placeholderTextColor="#9CA3AF"
             secureTextEntry={secureTextEntry ? hidden : false}
-            className="text-base font-semibold text-ink"
-            style={{ paddingVertical: 0 }}
+            className="text-base font-semibold text-ink touch-target"
+            style={{ paddingVertical: 8, minHeight: 44 }}
+            accessibilityLabel={label}
+            accessibilityHint={hint}
+            aria-invalid={hasError}
+            autoComplete={inputProps.autoComplete}
+            textContentType={inputProps.textContentType}
           />
-          {hint && empty ? (
-            <Text className="text-sm text-hint">{hint}</Text>
-          ) : null}
         </View>
         {secureTextEntry ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={hidden ? "Show password" : "Hide password"}
+            accessibilityState={{ selected: !hidden }}
             onPress={() => setHidden((v) => !v)}
-            hitSlop={8}
+            hitSlop={12}
+            className="touch-target items-center justify-center"
           >
             <MaterialCommunityIcons
               name={hidden ? "eye" : "eye-off"}
               size={22}
-              color="#3C424D"
+              color="#5C6168"
+              importantForAccessibility="no-hide-descendants"
             />
           </Pressable>
         ) : null}
       </View>
+
+      {/* Hint text - always visible below the field */}
+      {hint && (
+        <Text id={hintId} className="mt-1 text-sm text-hint" accessibilityLiveRegion="polite">
+          {hint}
+        </Text>
+      )}
+
+      {/* Error message - announced to screen readers */}
       {error ? (
-        <Text
-          className="mt-1 text-xs text-accent"
-          accessibilityLiveRegion="polite"
-        >
+        <Text id={errorId} className="mt-1 text-sm text-error" accessibilityLiveRegion="assertive" role="alert">
           {error}
         </Text>
       ) : null}

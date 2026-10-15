@@ -38,8 +38,8 @@ test("renders the login screen from the design", async () => {
 
 test("labels both input fields", async () => {
   await renderLogin();
-  expect(screen.getByPlaceholderText("Email address")).toBeOnTheScreen();
-  expect(screen.getByPlaceholderText("Password")).toBeOnTheScreen();
+  expect(screen.getByLabelText("Email address")).toBeOnTheScreen();
+  expect(screen.getByLabelText("Password")).toBeOnTheScreen();
 });
 
 test("offers the password visibility toggle on the password field only", async () => {
@@ -68,11 +68,8 @@ test("signs in through the API and redirects to the tabs", async () => {
 
   const router = await renderLogin();
 
-  fireEvent.changeText(
-    screen.getByPlaceholderText("Email address"),
-    "john@example.com",
-  );
-  fireEvent.changeText(screen.getByPlaceholderText("Password"), "hunter2!");
+  fireEvent.changeText(screen.getByLabelText("Email address"), "john@example.com");
+  fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
   await fireEvent.press(screen.getByText("Sign in"));
 
   expect(api.login).toHaveBeenCalledWith({

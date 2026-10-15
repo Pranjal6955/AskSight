@@ -16,12 +16,18 @@ export function PrimaryButton({
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled, busy: loading }}
+      accessibilityLiveRegion={loading ? "polite" : undefined}
       disabled={disabled}
       onPress={onPress}
-      className="flex-row items-center justify-center gap-2 rounded-field bg-brand py-4 active:bg-brand-deep disabled:opacity-60"
+      className="flex-row items-center justify-center gap-2 rounded-field bg-brand py-4 px-6 active:bg-brand-deep disabled:opacity-60 touch-target focus-visible:outline focus-visible:outline-3 focus-visible:outline-focus"
     >
       {loading ? (
-        <ActivityIndicator color="#FDFBF4" />
+        <>
+          <ActivityIndicator color="#FDFBF4" size="small" importantForAccessibility="no-hide-descendants" />
+          <Text className="text-base font-bold text-canvas" accessibilityLiveRegion="polite">
+            Loading
+          </Text>
+        </>
       ) : (
         <>
           <Text className="text-base font-bold text-canvas">{label}</Text>
@@ -29,6 +35,7 @@ export function PrimaryButton({
             name="arrow-right"
             size={20}
             color="#FDFBF4"
+            importantForAccessibility="no-hide-descendants"
           />
         </>
       )}

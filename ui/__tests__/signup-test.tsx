@@ -27,10 +27,8 @@ test("renders the signup screen from the design", async () => {
   await renderSignup();
 
   expect(screen.getByText("Create your account")).toBeOnTheScreen();
-  expect(
-    screen.getByText("Join AskSight and start exploring"),
-  ).toBeOnTheScreen();
-  expect(screen.getByLabelText("Go back")).toBeOnTheScreen();
+  expect(screen.getByText("Join AskSight and start exploring")).toBeOnTheScreen();
+  expect(screen.getByLabelText("Go back to sign in")).toBeOnTheScreen();
   expect(screen.getByText("Continue with Google")).toBeOnTheScreen();
   expect(screen.getByText("Sign in")).toBeOnTheScreen();
 });
@@ -38,17 +36,17 @@ test("renders the signup screen from the design", async () => {
 test("labels all three fields and shows the password rules", async () => {
   await renderSignup();
 
-  expect(screen.getByPlaceholderText("Full name")).toBeOnTheScreen();
-  expect(screen.getByPlaceholderText("Email address")).toBeOnTheScreen();
-  expect(screen.getByPlaceholderText("Password")).toBeOnTheScreen();
-  expect(screen.getByText("e.g. John Doe")).toBeOnTheScreen();
-  expect(screen.getByText("Minimum 8 characters")).toBeOnTheScreen();
+  expect(screen.getByLabelText("Full name")).toBeOnTheScreen();
+  expect(screen.getByLabelText("Email address")).toBeOnTheScreen();
+  expect(screen.getByLabelText("Password")).toBeOnTheScreen();
+  expect(screen.getByPlaceholderText("e.g. John Doe")).toBeOnTheScreen();
+  expect(screen.getByPlaceholderText("Minimum 8 characters")).toBeOnTheScreen();
 });
 
-test("hides the field hints once the user types", async () => {
+test("shows field hints initially", async () => {
   await renderSignup();
-  fireEvent.changeText(screen.getByPlaceholderText("Full name"), "John");
-  expect(screen.queryByText("e.g. John Doe")).toBeNull();
+  expect(screen.getByText("e.g. John Doe")).toBeOnTheScreen();
+  expect(screen.getByText("Minimum 8 characters")).toBeOnTheScreen();
 });
 
 test("creates the account and lands on the tabs", async () => {
@@ -71,12 +69,9 @@ test("creates the account and lands on the tabs", async () => {
 
   const router = await renderSignup();
 
-  fireEvent.changeText(screen.getByPlaceholderText("Full name"), "John Doe");
-  fireEvent.changeText(
-    screen.getByPlaceholderText("Email address"),
-    "john@example.com",
-  );
-  fireEvent.changeText(screen.getByPlaceholderText("Password"), "hunter2!");
+  fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+  fireEvent.changeText(screen.getByLabelText("Email address"), "john@example.com");
+  fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
   await fireEvent.press(screen.getByText("Create account"));
 
   expect(api.signup).toHaveBeenCalledWith({
@@ -93,12 +88,9 @@ test("rejects a password under the backend minimum before calling the API", asyn
 
   await renderSignup();
 
-  fireEvent.changeText(screen.getByPlaceholderText("Full name"), "John Doe");
-  fireEvent.changeText(
-    screen.getByPlaceholderText("Email address"),
-    "john@example.com",
-  );
-  fireEvent.changeText(screen.getByPlaceholderText("Password"), "short");
+  fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+  fireEvent.changeText(screen.getByLabelText("Email address"), "john@example.com");
+  fireEvent.changeText(screen.getByLabelText("Password"), "short");
   await fireEvent.press(screen.getByText("Create account"));
 
   expect(
@@ -115,12 +107,9 @@ test("surfaces the backend 409 when the email is already registered", async () =
 
   await renderSignup();
 
-  fireEvent.changeText(screen.getByPlaceholderText("Full name"), "John Doe");
-  fireEvent.changeText(
-    screen.getByPlaceholderText("Email address"),
-    "john@example.com",
-  );
-  fireEvent.changeText(screen.getByPlaceholderText("Password"), "hunter2!");
+  fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+  fireEvent.changeText(screen.getByLabelText("Email address"), "john@example.com");
+  fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
   await fireEvent.press(screen.getByText("Create account"));
 
   expect(

@@ -6,7 +6,7 @@ function Mark({ size }: { size: number }) {
   const bar = Math.max(2, Math.round(size * 0.1));
 
   return (
-    <View className="flex-row items-center">
+    <View className="flex-row items-center" importantForAccessibility="no-hide-descendants">
       <View
         className="items-center justify-center rounded-full bg-brand"
         style={{ width: size, height: size }}
@@ -35,7 +35,7 @@ function Mark({ size }: { size: number }) {
 export function BrandLogo({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
-      <View className="flex-row items-center gap-2">
+      <View className="flex-row items-center gap-2" accessibilityLabel="AskSight">
         <Mark size={22} />
         <Text className="text-lg font-bold text-ink">AskSight</Text>
       </View>
@@ -43,7 +43,7 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <View className="items-center">
+    <View className="items-center" accessibilityLabel="AskSight">
       <Mark size={64} />
       <Text className="mt-4 text-4xl font-bold text-brand">AskSight</Text>
     </View>

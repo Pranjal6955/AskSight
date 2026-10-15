@@ -11,6 +11,11 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: "#FDFBF4",
           borderTopColor: "#E5E0D6",
+          height: 64, // Ensure 44+ touch target
+        },
+        tabBarItemStyle: {
+          minWidth: 72,
+          minHeight: 44,
         },
       }}
     >
@@ -18,8 +23,14 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home" color={color} size={size} />
+          tabBarAccessibilityLabel: "Home, ask a question",
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "home" : "home-outline"}
+              color={color}
+              size={size}
+              accessibilityHidden={true}
+            />
           ),
         }}
       />
@@ -27,8 +38,14 @@ export default function TabsLayout() {
         name="history"
         options={{
           title: "History",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="history" color={color} size={size} />
+          tabBarAccessibilityLabel: "History, view past questions",
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "history" : "history"}
+              color={color}
+              size={size}
+              accessibilityHidden={true}
+            />
           ),
         }}
       />
@@ -36,8 +53,14 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="cog" color={color} size={size} />
+          tabBarAccessibilityLabel: "Settings, manage your account",
+          tabBarIcon: ({ color, size, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "cog" : "cog-outline"}
+              color={color}
+              size={size}
+              accessibilityHidden={true}
+            />
           ),
         }}
       />

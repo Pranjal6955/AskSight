@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -55,14 +56,17 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          <Text className="mt-10 text-4xl font-bold text-ink">
-            Welcome back
-          </Text>
-          <Text className="mt-1 text-base text-muted">Sign in to continue</Text>
+          <View className="mt-10" accessibilityLiveRegion="polite">
+            <Text className="text-4xl font-bold text-ink" accessibilityRole="header">
+              Welcome back
+            </Text>
+            <Text className="mt-1 text-base text-muted">Sign in to continue</Text>
+          </View>
 
           <View className="mt-8 gap-4">
             <AuthField
               label="Email address"
+              hint="e.g. yourname@example.com"
               icon="mail"
               value={email}
               onChangeText={setEmail}
@@ -74,6 +78,7 @@ export default function LoginScreen() {
             />
             <AuthField
               label="Password"
+              hint="Enter your password"
               icon="lock"
               secureTextEntry
               value={password}
@@ -85,25 +90,25 @@ export default function LoginScreen() {
             />
           </View>
 
-          <Text className="mt-3 self-end text-sm font-semibold text-brand-link">
-            Forgot password?
-          </Text>
+          <Pressable
+            className="mt-3 self-end"
+            onPress={() => {} /* TODO: implement password reset */}
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password? Opens password reset"
+          >
+            <Text className="text-sm font-semibold text-brand-link underline">
+              Forgot password?
+            </Text>
+          </Pressable>
 
           {error ? (
-            <Text
-              className="mt-4 text-sm text-accent"
-              accessibilityLiveRegion="polite"
-            >
+            <Text className="mt-4 text-sm text-error" accessibilityLiveRegion="assertive" role="alert">
               {error}
             </Text>
           ) : null}
 
           <View className="mt-6">
-            <PrimaryButton
-              label="Sign in"
-              loading={loading}
-              onPress={onSubmit}
-            />
+            <PrimaryButton label="Sign in" loading={loading} onPress={onSubmit} />
           </View>
 
           <View className="mt-6 gap-6">
@@ -113,7 +118,7 @@ export default function LoginScreen() {
 
           <Text className="mt-8 text-center text-sm text-muted">
             Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-semibold text-brand-link">
+            <Link href="/signup" className="font-semibold text-brand-link underline" accessibilityLabel="Create a new account">
               Sign up
             </Link>
           </Text>
