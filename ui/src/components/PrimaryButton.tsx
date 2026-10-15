@@ -41,19 +41,19 @@ export function PrimaryButton({
             size="small"
             importantForAccessibility="no-hide-descendants"
           />
-<Text
-              className="text-2xl font-bold text-white"
-              accessibilityLiveRegion="polite"
-            >
-              Signing in…
-            </Text>
+          <Text
+            className="text-3xl font-bold text-white"
+            accessibilityLiveRegion="polite"
+          >
+            Signing in…
+          </Text>
         </>
       ) : (
         <>
-          <Text className="text-2xl font-bold text-white">{label}</Text>
+          <Text className="text-3xl font-bold text-white">{label}</Text>
           <MaterialCommunityIcons
             name="arrow-right"
-            size={22}
+            size={26}
             color="#FFFFFF"
             importantForAccessibility="no-hide-descendants"
           />

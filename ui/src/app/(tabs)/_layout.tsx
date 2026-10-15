@@ -11,11 +11,16 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: "#FDFBF4",
           borderTopColor: "#E5E0D6",
-          height: 64, // Ensure 44+ touch target
+          height: 80,
         },
         tabBarItemStyle: {
           minWidth: 72,
-          minHeight: 44,
+          minHeight: 56,
+          paddingTop: 6,
+        },
+        tabBarLabelStyle: {
+          fontSize: 15,
+          fontWeight: "600",
         },
       }}
     >

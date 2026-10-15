@@ -28,9 +28,8 @@ type FieldProps = Pick<
   labelClassName?: string;
 };
 
-// WCAG 2.2 AA: the label is a real, always-visible <Text> above the input and
-// the hint is separate from the placeholder, so neither is the only thing a
-// user can rely on.
+// WCAG 2.2 AA: the label is always visible above the input, so the field never
+// relies on placeholder text alone.
 export function AuthField({
   label,
   hint,
@@ -44,21 +43,22 @@ export function AuthField({
   const [hidden, setHidden] = useState(Boolean(secureTextEntry));
   const ids = useId();
   const labelId = `${ids}-label`;
-  const hintId = `${ids}-hint`;
   const errorId = `${ids}-error`;
   const hasError = Boolean(error);
 
   // The field carries its own association ids so `aria-describedby` can point a
   // screen reader at exactly the hint and error text that belongs to it.
-  const describedBy = [hint ? hintId : null, hasError ? errorId : null]
-    .filter(Boolean)
-    .join(" ");
+  const describedBy = hasError ? errorId : undefined;
 
   return (
     <View>
       <Text
         nativeID={labelId}
-        className={labelClassName ? labelClassName : "mb-1 text-base font-semibold text-ink"}
+        className={
+          labelClassName
+            ? labelClassName
+            : "mb-2 text-lg font-semibold text-ink"
+        }
         accessibilityLiveRegion="polite"
       >
         {label}
@@ -75,14 +75,14 @@ export function AuthField({
         {hasError ? (
           <MaterialCommunityIcons
             name="alert-circle-outline"
-            size={22}
+            size={26}
             color="#A02C01"
             importantForAccessibility="no-hide-descendants"
           />
         ) : (
           <MaterialCommunityIcons
             name={icon}
-            size={22}
+            size={26}
             color="#3C424D"
             importantForAccessibility="no-hide-descendants"
           />
@@ -91,17 +91,15 @@ export function AuthField({
           <TextInput
             {...inputProps}
             editable={editable}
-            // The placeholder is a format example only and stays 6.24:1 — the
-            // label above is the real label, so an empty field never relies on it.
             placeholder={hint}
             placeholderTextColor="#5C6168"
             secureTextEntry={secureTextEntry ? hidden : false}
-            className="touch-target text-lg text-ink"
-            style={{ paddingVertical: 8, minHeight: 44, fontSize: 18 }}
+            className="touch-target text-xl text-ink"
+            style={{ paddingVertical: 10, minHeight: 48, fontSize: 20 }}
             accessibilityLabel={label}
             accessibilityHint={hint}
             aria-labelledby={labelId}
-            aria-describedby={describedBy || undefined}
+            aria-describedby={describedBy}
             aria-invalid={hasError}
             importantForAccessibility="yes"
           />
@@ -118,7 +116,7 @@ export function AuthField({
           >
             <MaterialCommunityIcons
               name={hidden ? "eye" : "eye-off"}
-              size={24}
+              size={26}
               color="#3C424D"
               importantForAccessibility="no-hide-descendants"
             />
@@ -126,20 +124,10 @@ export function AuthField({
         ) : null}
       </View>
 
-      {hint ? (
-        <Text
-          nativeID={hintId}
-          className="mt-1 text-base text-hint"
-          accessibilityLiveRegion="polite"
-        >
-          {hint}
-        </Text>
-      ) : null}
-
       {error ? (
         <Text
           nativeID={errorId}
-          className="mt-1 flex-row items-center gap-1 text-base font-semibold text-error"
+          className="mt-2 flex-row items-center gap-1 text-lg font-semibold text-error"
           accessibilityLiveRegion="assertive"
           role="alert"
         >

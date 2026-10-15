@@ -1,108 +1,120 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Pressable, Text, View } from "react-native";
+import { router } from "expo-router";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { Blobs } from "@/components/Blobs";
 import { useAuth } from "@/lib/auth";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const initials = user?.name
+    .trim()
+    .split(/\s+/)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  function handleSignOut() {
+    signOut();
+    router.replace("/login");
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top"]}>
-      <Blobs />
-      <View className="flex-1 px-6 pt-6">
-        <Text
-          className="text-4xl font-bold text-ink"
-          accessibilityRole="header"
-        >
-          Settings
-        </Text>
-
-        {user ? (
-          <View
-            className="touch-target mt-8 rounded-card bg-card-grey p-4"
-            accessibilityLabel={`Signed in as ${user.name}`}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 24,
+          paddingTop: 32,
+          paddingBottom: 32,
+        }}
+      >
+        <View className="mx-auto w-full max-w-[560px]">
+          <Text
+            className="text-4xl font-bold leading-10 text-ink"
+            accessibilityRole="header"
           >
-            <Text className="text-base font-bold text-ink">{user.name}</Text>
-            <Text className="mt-1 text-sm text-muted">{user.email}</Text>
-          </View>
-        ) : (
-          <View
-            className="touch-target mt-8 items-center justify-center rounded-card bg-field p-6"
-            accessibilityLabel="Not signed in"
-          >
-            <Text className="text-center text-base text-muted">
-              Sign in to manage your account
-            </Text>
-          </View>
-        )}
+            Settings
+          </Text>
+          <Text className="mt-3 text-xl leading-7 text-muted">
+            Manage your AskSight account.
+          </Text>
 
-        <View className="mt-8 gap-4" accessibilityLabel="Account actions">
+          <Text
+            className="mb-3 mt-8 text-2xl font-bold text-ink"
+            accessibilityRole="header"
+          >
+            Your account
+          </Text>
+          {user ? (
+            <View
+              className="flex-row items-center gap-4 rounded-card border-2 border-inputBorder bg-white p-5"
+              accessibilityLabel={`Signed in as ${user.name}, ${user.email}`}
+            >
+              <View className="h-16 w-16 items-center justify-center rounded-full bg-card-green">
+                <Text className="text-xl font-bold text-brand">{initials}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className="text-xl font-bold text-ink">{user.name}</Text>
+                <Text className="mt-1 text-lg leading-6 text-muted">
+                  {user.email}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View className="rounded-card border-2 border-inputBorder bg-white p-5">
+              <Text className="text-lg leading-7 text-muted">
+                Sign in to manage your account.
+              </Text>
+            </View>
+          )}
+
           <Pressable
             accessibilityRole="button"
-            onPress={signOut}
-            className="touch-target focus-visible:outline-3 flex-row items-center gap-3 rounded-field bg-field px-6 py-4 focus-visible:outline focus-visible:outline-focus active:opacity-70"
-            hitSlop={8}
             accessibilityLabel="Sign out of your account"
+            accessibilityHint="Returns to the sign in screen"
+            accessibilityState={{ disabled: !user }}
+            disabled={!user}
+            onPress={handleSignOut}
+            className={`touch-target mt-5 flex-row items-center justify-center gap-3 rounded-field border-2 bg-white px-6 py-4 ${
+              user ? "border-error active:bg-card-orange" : "border-inputBorder"
+            }`}
           >
             <MaterialCommunityIcons
               name="logout"
-              size={22}
-              color="#B33F01"
-              accessibilityHidden={true}
+              size={26}
+              color={user ? "#A02C01" : "#5C6168"}
+              importantForAccessibility="no-hide-descendants"
             />
-            <Text className="text-base font-semibold text-error">Sign out</Text>
+            <Text
+              className={`text-xl font-bold ${user ? "text-error" : "text-muted"}`}
+            >
+              Sign out
+            </Text>
           </Pressable>
 
-          <View
-            className="border-field-border touch-target flex-row items-center gap-3 rounded-field border bg-field px-6 py-4 opacity-60"
-            accessibilityLabel="Delete account - not yet available"
-          >
-            <MaterialCommunityIcons
-              name="account-remove-outline"
-              size={22}
-              color="#5C6168"
-              accessibilityHidden={true}
-            />
-            <Text className="text-base font-semibold text-muted">
-              Delete account
-            </Text>
-          </View>
-        </View>
-
-        <View className="mt-12 gap-4" accessibilityLabel="App information">
           <Text
-            className="text-lg font-semibold text-ink"
+            className="mb-3 mt-10 text-2xl font-bold text-ink"
             accessibilityRole="header"
           >
-            About
+            About AskSight
           </Text>
-          <View className="touch-target rounded-card bg-field p-4">
-            <Text className="text-sm text-muted">
+          <View className="flex-row items-start gap-4 rounded-card border-2 border-inputBorder bg-white p-5">
+            <MaterialCommunityIcons
+              name="eye-outline"
+              size={30}
+              color="#005B48"
+              importantForAccessibility="no-hide-descendants"
+            />
+            <Text className="flex-1 text-lg leading-7 text-muted">
               AskSight helps blind and low-vision users understand their
-              surroundings through AI-powered image descriptions, voice
-              questions, and text input.
-            </Text>
-          </View>
-          <View className="mt-4 flex-row gap-4">
-            <Text
-              accessibilityRole="link"
-              accessibilityLabel="Privacy policy - not yet available"
-              className="text-sm font-medium text-brand-link underline opacity-60"
-            >
-              Privacy policy
-            </Text>
-            <Text
-              accessibilityRole="link"
-              accessibilityLabel="Terms of service - not yet available"
-              className="text-sm font-medium text-brand-link underline opacity-60"
-            >
-              Terms of service
+              surroundings through image descriptions and questions.
             </Text>
           </View>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
