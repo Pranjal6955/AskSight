@@ -1,40 +1,60 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { ActivityIndicator, Pressable, Text } from "react-native";
 
+type Props = {
+  label: string;
+  onPress: () => void;
+  loading?: boolean;
+  disabled?: boolean;
+};
+
 export function PrimaryButton({
   label,
   onPress,
   loading = false,
-}: {
-  label: string;
-  onPress: () => void;
-  loading?: boolean;
-}) {
-  const disabled = loading;
+  disabled = false,
+}: Props) {
+  const isDisabled = loading || disabled;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ disabled, busy: loading }}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       accessibilityLiveRegion={loading ? "polite" : undefined}
-      disabled={disabled}
+      disabled={isDisabled}
       onPress={onPress}
-      className="flex-row items-center justify-center gap-2 rounded-field bg-brand py-4 px-6 active:bg-brand-deep disabled:opacity-60 touch-target focus-visible:outline focus-visible:outline-3 focus-visible:outline-focus"
+      // Disabled switches to brand-muted (white on it = 5.91:1) rather than
+      // dimming the whole button, so the label never drops below AA. State is
+      // carried by the accessible label too, never by colour alone.
+      className={`touch-target focus-visible:outline-3 flex-row items-center justify-center gap-2 rounded-field px-6 py-4 focus-visible:outline focus-visible:outline-focus ${
+        loading
+          ? "bg-brand"
+          : isDisabled
+            ? "bg-brand-muted"
+            : "bg-brand active:bg-brand-deep"
+      }`}
     >
       {loading ? (
         <>
-          <ActivityIndicator color="#FDFBF4" size="small" importantForAccessibility="no-hide-descendants" />
-          <Text className="text-base font-bold text-canvas" accessibilityLiveRegion="polite">
-            Loading
-          </Text>
+          <ActivityIndicator
+            color="#FFFFFF"
+            size="small"
+            importantForAccessibility="no-hide-descendants"
+          />
+<Text
+              className="text-2xl font-bold text-white"
+              accessibilityLiveRegion="polite"
+            >
+              Signing in…
+            </Text>
         </>
       ) : (
         <>
-          <Text className="text-base font-bold text-canvas">{label}</Text>
+          <Text className="text-2xl font-bold text-white">{label}</Text>
           <MaterialCommunityIcons
             name="arrow-right"
-            size={20}
-            color="#FDFBF4"
+            size={22}
+            color="#FFFFFF"
             importantForAccessibility="no-hide-descendants"
           />
         </>

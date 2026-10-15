@@ -9,10 +9,10 @@ export function Blobs() {
       className="absolute inset-0 overflow-hidden"
       importantForAccessibility="no-hide-descendants"
     >
-      <View className="absolute -left-16 -top-24 h-56 w-56 rounded-full bg-mint opacity-70" />
-      <View className="absolute -right-16 -top-20 h-48 w-48 rounded-full bg-peach opacity-60" />
-      <View className="absolute -bottom-24 -left-14 h-56 w-56 rounded-full bg-peach opacity-50" />
-      <View className="absolute -bottom-20 -right-16 h-52 w-52 rounded-full bg-mint opacity-60" />
+      <View className="bg-mint absolute -left-16 -top-24 h-56 w-56 rounded-full opacity-70" />
+      <View className="bg-peach absolute -right-16 -top-20 h-48 w-48 rounded-full opacity-60" />
+      <View className="bg-peach absolute -bottom-24 -left-14 h-56 w-56 rounded-full opacity-50" />
+      <View className="bg-mint absolute -bottom-20 -right-16 h-52 w-52 rounded-full opacity-60" />
     </View>
   );
 }

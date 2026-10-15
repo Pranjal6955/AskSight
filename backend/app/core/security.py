@@ -2,10 +2,15 @@ import os
 from datetime import UTC, datetime, timedelta
 
 import jwt
+from dotenv import load_dotenv
 from pwdlib import PasswordHash
 from pwdlib.exceptions import UnknownHashError
 
+load_dotenv()
+
 SECRET_KEY = os.getenv("JWT")
+if not SECRET_KEY:
+    raise RuntimeError("JWT is not set in the environment (.env)")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 

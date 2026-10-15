@@ -2,38 +2,35 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark theme color overrides */
+/* Dark theme. Every pair below is verified >= 4.5:1 for text and >= 3:1 for
+   boundaries; see the PR description for the measured figures. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-canvas: #1A1A1A;
-    --color-ink: #FFFFFF;
-    --color-muted: #D1D5DB;
-    --color-hint: #9CA3AF;
-    --color-field: #2D2D2D;
-    --color-field-border: #4B5563;
-    --color-card-green: #0F2E1E;
-    --color-card-orange: #2E1E0A;
-    --color-card-grey: #2D2D2D;
-    --color-tile-green: #0A5C3F;
-    --color-tile-orange: #CC6600;
-    --color-tile-grey: #4B5563;
-    --color-avatar: #0F2E1E;
-    --color-accent: #F97316;
-    --color-error: #F97316;
-    --color-focus: #4ADE80;
-    --color-mint: #0F2E1E;
-    --color-peach: #2E1E0A;
-    --color-brand-link: #6EE7B7;
+    --color-canvas: #1a1a1a;
+    --color-input: #2a2a2a;
+    --color-input-border: #8a94a0; /* 4.66:1 on the input surface */
+    --color-ink: #ffffff; /* 14.35:1 on the input surface */
+    --color-muted: #d1d5db;
+    --color-hint: #a8b0b8; /* 6.54:1 on the input surface */
+    --color-error: #f97030;
+    --color-focus: #6ee7b7;
+    --color-brand: #0e7a5f; /* 3.29:1 vs canvas, white text 5.29:1 */
+    --color-brand-muted: #106b55; /* white text 6.45:1 */
+    --color-brand-deep: #0a5c48;
+    --color-brand-link: #6ee7b7;
+    --color-field: #2a2a2a;
+    --color-field-border: #8a94a0;
+    --color-tile-green: #0e7a5f;
   }
 }
 
-/* Focus visible styles for keyboard navigation */
+/* Visible keyboard focus indicator (web). */
 *:focus-visible {
-  outline: 3px solid var(--color-focus, #08513F);
+  outline: 3px solid var(--color-focus, #005b48);
   outline-offset: 2px;
 }
 
-/* Reduced motion */
+/* Respect reduced-motion preferences. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -45,16 +42,15 @@
   }
 }
 
-/* High contrast mode support */
+/* Users who ask for more contrast get a stronger boundary and darker hint. */
 @media (prefers-contrast: high) {
   :root {
-    --color-hint: #3C424D;
-    --color-muted: #1F272E;
-    --color-field-border: #000000;
+    --color-hint: #3c424d;
+    --color-input-border: #000000;
   }
 }
 
-/* Touch target minimum sizing */
+/* Touch target minimum sizing. */
 .touch-target {
   min-width: 44px;
   min-height: 44px;
