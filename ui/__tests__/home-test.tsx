@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Text } from "react-native";
 import {
   fireEvent,
   renderRouter,
@@ -27,7 +28,6 @@ function mockSignedIn() {
   jest.spyOn(api, "me").mockResolvedValue(USER);
 }
 
-// Mirrors the real tree: AuthProvider sits above the tabs navigator.
 function SignInOnMount() {
   const { signIn } = useAuth();
   useEffect(() => {
@@ -48,57 +48,290 @@ function renderTabs({ signedIn = false } = {}) {
       "(tabs)/home": HomeScreen,
       "(tabs)/history": HistoryScreen,
       "(tabs)/settings": SettingsScreen,
+      login: () => <Text>Login</Text>,
     },
     { initialUrl: "/home" },
   );
 }
 
-test("greets the signed-in user by first name", async () => {
-  mockSignedIn();
-  await renderTabs({ signedIn: true });
+describe("Tabs layout", () => {
+  describe("tab bar", () => {
+    test("shows the Home, History and Settings tabs", async () => {
+      await renderTabs();
+      expect(screen.getByText("Home")).toBeOnTheScreen();
+      expect(screen.getByText("History")).toBeOnTheScreen();
+      expect(screen.getByText("Settings")).toBeOnTheScreen();
+    });
 
-  await waitFor(() =>
-    expect(screen.getByText("Hello, John!")).toBeOnTheScreen(),
-  );
-  expect(screen.getByText("How can I help you today?")).toBeOnTheScreen();
-  expect(screen.getByText("JS")).toBeOnTheScreen();
+    test("switches to History tab on press", async () => {
+      const router = await renderTabs();
+      await fireEvent.press(screen.getByText("History"));
+      expect(router.getPathname()).toBe("/history");
+    });
+
+    test("switches to Settings tab on press", async () => {
+      const router = await renderTabs();
+      await fireEvent.press(screen.getByText("Settings"));
+      expect(router.getPathname()).toBe("/settings");
+    });
+
+    test("switches back to Home tab on press", async () => {
+      const router = await renderTabs();
+      await fireEvent.press(screen.getByText("History"));
+      await fireEvent.press(screen.getByText("Home"));
+      expect(router.getPathname()).toBe("/home");
+    });
+  });
 });
 
-test("renders the three ask actions from the design", async () => {
-  await renderTabs();
+describe("Home screen", () => {
+  describe("signed out", () => {
+    test("shows the generic greeting when signed out", async () => {
+      await renderTabs();
+      expect(screen.getByText("Hello there!")).toBeOnTheScreen();
+    });
 
-  expect(screen.getByText("Ask with Camera")).toBeOnTheScreen();
-  expect(screen.getByText("Ask with Voice")).toBeOnTheScreen();
-  expect(screen.getByText("Ask with Text")).toBeOnTheScreen();
-  expect(
-    screen.getByText("Take a photo and get an AI description of your surroundings"),
-  ).toBeOnTheScreen();
-  expect(screen.getByText("Speak your question and hear the response")).toBeOnTheScreen();
-  expect(screen.getByText("Type your question and read the response")).toBeOnTheScreen();
+    test("shows the help prompt", async () => {
+      await renderTabs();
+      expect(
+        screen.getByText("How can I help you today?"),
+      ).toBeOnTheScreen();
+    });
+
+    test("shows the exploration subtitle", async () => {
+      await renderTabs();
+      expect(
+        screen.getByText("Choose how you would like to explore what is around you."),
+      ).toBeOnTheScreen();
+    });
+  });
+
+  describe("signed in", () => {
+    test("greets the user by first name", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      await waitFor(() =>
+        expect(screen.getByText("Hello, John!")).toBeOnTheScreen(),
+      );
+    });
+
+    test("shows the user initials avatar", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      await waitFor(() =>
+        expect(screen.getByText("JS")).toBeOnTheScreen(),
+      );
+    });
+
+    test("shows the signed-in accessibility label on the avatar", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      await waitFor(() =>
+        expect(
+          screen.getByLabelText("Signed in as John Smith"),
+        ).toBeOnTheScreen(),
+      );
+    });
+  });
+
+  describe("ask actions", () => {
+    test("renders the Ask with Camera card", async () => {
+      await renderTabs();
+      expect(screen.getByText("Ask with Camera")).toBeOnTheScreen();
+      expect(
+        screen.getByText(
+          "Take a photo and get an AI description of your surroundings",
+        ),
+      ).toBeOnTheScreen();
+    });
+
+    test("renders the Ask with Voice card", async () => {
+      await renderTabs();
+      expect(screen.getByText("Ask with Voice")).toBeOnTheScreen();
+      expect(
+        screen.getByText("Speak your question and hear the response"),
+      ).toBeOnTheScreen();
+    });
+
+    test("renders the Ask with Text card", async () => {
+      await renderTabs();
+      expect(screen.getByText("Ask with Text")).toBeOnTheScreen();
+      expect(
+        screen.getByText("Type your question and read the response"),
+      ).toBeOnTheScreen();
+    });
+
+    test("shows the accessibility label for each ask action", async () => {
+      await renderTabs();
+      expect(
+        screen.getByLabelText(
+          "Ask with Camera. Take a photo and get an AI description of your surroundings",
+        ),
+      ).toBeOnTheScreen();
+      expect(
+        screen.getByLabelText(
+          "Ask with Voice. Speak your question and hear the response",
+        ),
+      ).toBeOnTheScreen();
+      expect(
+        screen.getByLabelText(
+          "Ask with Text. Type your question and read the response",
+        ),
+      ).toBeOnTheScreen();
+    });
+  });
+
+  describe("info card", () => {
+    test("shows the app description info card", async () => {
+      await renderTabs();
+      expect(
+        screen.getByText(
+          "AskSight is designed to make everyday surroundings easier to understand.",
+        ),
+      ).toBeOnTheScreen();
+    });
+  });
 });
 
-test("shows the Home, History and Settings tabs", async () => {
-  await renderTabs();
+describe("History screen", () => {
+  test("shows the History heading", async () => {
+    await renderTabs();
+    await fireEvent.press(screen.getByText("History"));
+    expect(
+      await screen.findByText("Return to questions you have asked."),
+    ).toBeOnTheScreen();
+  });
 
-  expect(screen.getAllByText("Home").length).toBeGreaterThan(0);
-  expect(screen.getByText("History")).toBeOnTheScreen();
-  expect(screen.getByText("Settings")).toBeOnTheScreen();
+  test("shows the empty state", async () => {
+    await renderTabs();
+    await fireEvent.press(screen.getByText("History"));
+    expect(await screen.findByText("No questions yet")).toBeOnTheScreen();
+  });
+
+  test("shows the empty state description", async () => {
+    await renderTabs();
+    await fireEvent.press(screen.getByText("History"));
+    expect(
+      await screen.findByText("Your past questions will appear here."),
+    ).toBeOnTheScreen();
+  });
+
+  test("shows the coming soon note", async () => {
+    await renderTabs();
+    await fireEvent.press(screen.getByText("History"));
+    expect(
+      await screen.findByText(
+        "Your question history will be available when saved sessions are supported.",
+      ),
+    ).toBeOnTheScreen();
+  });
+
+  test("renders the Ask your first question button", async () => {
+    await renderTabs();
+    await fireEvent.press(screen.getByText("History"));
+    expect(
+      await screen.findByText("Ask your first question"),
+    ).toBeOnTheScreen();
+  });
+
+  test("navigates back to Home on Ask your first question press", async () => {
+    const router = await renderTabs();
+    await fireEvent.press(screen.getByText("History"));
+    await fireEvent.press(
+      await screen.findByText("Ask your first question"),
+    );
+    await waitFor(() => expect(router.getPathname()).toBe("/home"));
+  });
 });
 
-test("switches between tabs", async () => {
-  const router = await renderTabs();
+describe("Settings screen", () => {
+  describe("signed out", () => {
+    test("shows the Settings heading", async () => {
+      await renderTabs();
+      await fireEvent.press(screen.getByText("Settings"));
+      expect(
+        await screen.findByText("Manage your AskSight account."),
+      ).toBeOnTheScreen();
+    });
 
-  await fireEvent.press(screen.getByText("History"));
-  expect(router.getPathname()).toBe("/history");
+    test("shows the sign-in prompt when signed out", async () => {
+      await renderTabs();
+      await fireEvent.press(screen.getByText("Settings"));
+      expect(
+        await screen.findByText("Sign in to manage your account."),
+      ).toBeOnTheScreen();
+    });
 
-  await fireEvent.press(screen.getByText("Settings"));
-  expect(router.getPathname()).toBe("/settings");
-});
+    test("disables the Sign out button when signed out", async () => {
+      await renderTabs();
+      await fireEvent.press(screen.getByText("Settings"));
+      const signOut = await screen.findByLabelText(
+        "Sign out of your account",
+      );
+      expect(signOut).toBeOnTheScreen();
+      expect(signOut.props.accessibilityState.disabled).toBe(true);
+    });
+  });
 
-test("History is a placeholder until the backend stores queries", async () => {
-  await renderTabs();
-  await fireEvent.press(screen.getByText("History"));
-  expect(
-    await screen.findByText("Your past questions will appear here."),
-  ).toBeOnTheScreen();
+  describe("signed in", () => {
+    test("shows the user name and email", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      await fireEvent.press(screen.getByText("Settings"));
+      await waitFor(() =>
+        expect(screen.getByText("John Smith")).toBeOnTheScreen(),
+      );
+      expect(screen.getByText("john@example.com")).toBeOnTheScreen();
+    });
+
+    test("shows the user initials avatar", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      await fireEvent.press(screen.getByText("Settings"));
+      await waitFor(() => expect(screen.getByText("JS")).toBeOnTheScreen());
+    });
+
+    test("enables the Sign out button when signed in", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      await fireEvent.press(screen.getByText("Settings"));
+      const signOut = await screen.findByLabelText(
+        "Sign out of your account",
+      );
+      expect(signOut.props.accessibilityState.disabled).toBe(false);
+    });
+
+    test("signs out and redirects to login on Sign out press", async () => {
+      mockSignedIn();
+      const router = await renderTabs({ signedIn: true });
+      await fireEvent.press(screen.getByText("Settings"));
+      await waitFor(() =>
+        expect(screen.getByText("John Smith")).toBeOnTheScreen(),
+      );
+      await fireEvent.press(
+        screen.getByLabelText("Sign out of your account"),
+      );
+      await waitFor(() => expect(router.getPathname()).toBe("/login"));
+    });
+  });
+
+  describe("about section", () => {
+    test("shows the About AskSight heading", async () => {
+      await renderTabs();
+      await fireEvent.press(screen.getByText("Settings"));
+      expect(
+        await screen.findByText("About AskSight"),
+      ).toBeOnTheScreen();
+    });
+
+    test("shows the app mission description", async () => {
+      await renderTabs();
+      await fireEvent.press(screen.getByText("Settings"));
+      expect(
+        await screen.findByText(
+          "AskSight helps blind and low-vision users understand their surroundings through image descriptions and questions.",
+        ),
+      ).toBeOnTheScreen();
+    });
+  });
 });
