@@ -17,7 +17,7 @@ export function GoogleButton() {
       <MaterialCommunityIcons
         name="google"
         size={24}
-        color="#3C424D"
+        color="#000000"
         importantForAccessibility="no-hide-descendants"
       />
       <Text className="text-lg font-semibold text-ink">
@@ -27,7 +27,7 @@ export function GoogleButton() {
         <MaterialCommunityIcons
           name="block-helper"
           size={18}
-          color="#5C6168"
+          color="#404040"
           importantForAccessibility="no-hide-descendants"
         />
         <Text className="text-base text-hint">Not yet available</Text>

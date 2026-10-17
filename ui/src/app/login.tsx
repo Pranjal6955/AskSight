@@ -98,7 +98,7 @@ export default function LoginScreen() {
               <MaterialCommunityIcons
                 name="alert-circle-outline"
                 size={24}
-                color="#A02C01"
+                color="#B42318"
               />
               <Text className="flex-1 text-xl font-semibold leading-7 text-error">
                 {error}

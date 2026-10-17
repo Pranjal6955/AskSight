@@ -76,14 +76,14 @@ export function AuthField({
           <MaterialCommunityIcons
             name="alert-circle-outline"
             size={26}
-            color="#A02C01"
+            color="#B42318"
             importantForAccessibility="no-hide-descendants"
           />
         ) : (
           <MaterialCommunityIcons
             name={icon}
             size={26}
-            color="#3C424D"
+              color="#000000"
             importantForAccessibility="no-hide-descendants"
           />
         )}
@@ -92,7 +92,7 @@ export function AuthField({
             {...inputProps}
             editable={editable}
             placeholder={hint}
-            placeholderTextColor="#5C6168"
+            placeholderTextColor="#404040"
             secureTextEntry={secureTextEntry ? hidden : false}
             className="touch-target text-xl text-ink"
             style={{ paddingVertical: 10, minHeight: 48, fontSize: 20 }}
@@ -117,7 +117,7 @@ export function AuthField({
             <MaterialCommunityIcons
               name={hidden ? "eye" : "eye-off"}
               size={26}
-              color="#3C424D"
+            color="#000000"
               importantForAccessibility="no-hide-descendants"
             />
           </Pressable>

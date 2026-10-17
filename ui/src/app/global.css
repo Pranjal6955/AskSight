@@ -2,31 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark theme. Every pair below is verified >= 4.5:1 for text and >= 3:1 for
-   boundaries; see the PR description for the measured figures. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-canvas: #1a1a1a;
-    --color-input: #2a2a2a;
-    --color-input-border: #8a94a0; /* 4.66:1 on the input surface */
-    --color-ink: #ffffff; /* 14.35:1 on the input surface */
-    --color-muted: #d1d5db;
-    --color-hint: #a8b0b8; /* 6.54:1 on the input surface */
-    --color-error: #f97030;
-    --color-focus: #6ee7b7;
-    --color-brand: #0e7a5f; /* 3.29:1 vs canvas, white text 5.29:1 */
-    --color-brand-muted: #106b55; /* white text 6.45:1 */
-    --color-brand-deep: #0a5c48;
-    --color-brand-link: #6ee7b7;
-    --color-field: #2a2a2a;
-    --color-field-border: #8a94a0;
-    --color-tile-green: #0e7a5f;
-  }
-}
-
 /* Visible keyboard focus indicator (web). */
 *:focus-visible {
-  outline: 3px solid var(--color-focus, #005b48);
+  outline: 3px solid #000000;
   outline-offset: 2px;
 }
 
@@ -42,10 +20,10 @@
   }
 }
 
-/* Users who ask for more contrast get a stronger boundary and darker hint. */
+/* Users who ask for more contrast get a stronger boundary. */
 @media (prefers-contrast: high) {
   :root {
-    --color-hint: #3c424d;
+    --color-hint: #000000;
     --color-input-border: #000000;
   }
 }

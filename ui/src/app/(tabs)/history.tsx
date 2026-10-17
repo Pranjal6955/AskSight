@@ -34,7 +34,7 @@ export default function HistoryScreen() {
               <MaterialCommunityIcons
                 name="history"
                 size={40}
-                color="#005B48"
+                color="#000000"
               />
             </View>
             <Text className="mt-6 text-center text-2xl font-bold text-ink">

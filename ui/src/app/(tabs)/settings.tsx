@@ -85,7 +85,7 @@ export default function SettingsScreen() {
             <MaterialCommunityIcons
               name="logout"
               size={26}
-              color={user ? "#A02C01" : "#5C6168"}
+              color={user ? "#B42318" : "#404040"}
               importantForAccessibility="no-hide-descendants"
             />
             <Text
@@ -105,7 +105,7 @@ export default function SettingsScreen() {
             <MaterialCommunityIcons
               name="eye-outline"
               size={30}
-              color="#005B48"
+              color="#000000"
               importantForAccessibility="no-hide-descendants"
             />
             <Text className="flex-1 text-lg leading-7 text-muted">

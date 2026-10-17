@@ -19,7 +19,7 @@ const waysToAsk = [
     icon: "microphone-outline" as const,
     titleColor: "text-ink",
     descriptionColor: "text-muted",
-    iconColor: "#005B48",
+    iconColor: "#000000",
   },
   {
     title: "Ask with Text",
@@ -27,7 +27,7 @@ const waysToAsk = [
     icon: "keyboard-outline" as const,
     titleColor: "text-ink",
     descriptionColor: "text-muted",
-    iconColor: "#005B48",
+    iconColor: "#000000",
   },
 ];
 
@@ -124,7 +124,7 @@ export default function HomeScreen() {
             <MaterialCommunityIcons
               name="information-outline"
               size={26}
-              color="#005B48"
+              color="#000000"
               importantForAccessibility="no-hide-descendants"
             />
             <Text className="flex-1 text-lg leading-7 text-muted">
