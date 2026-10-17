@@ -7,14 +7,14 @@ from app.db import db
 
 
 @asynccontextmanager
-async def lifespan(app : FastAPI):
+async def lifespan(app: FastAPI):
     # Startup : Connect to DB
     await db.connect()
     yield
-    #Shutdown : Disconnected from DB
+    # Shutdown : Disconnected from DB
     await db.disconnect()
+
 
 app = FastAPI(lifespan=lifespan)
 
 app.include_router(auth_router)
-

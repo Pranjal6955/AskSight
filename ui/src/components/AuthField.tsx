@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useState, type ComponentProps, useId } from "react";
+import { useState, type ComponentProps, useId, type Ref } from "react";
 import {
   Pressable,
   Text,
@@ -12,6 +12,7 @@ type FieldProps = Pick<
   TextInputProps,
   | "value"
   | "onChangeText"
+  | "onFocus"
   | "keyboardType"
   | "autoCapitalize"
   | "autoComplete"
@@ -26,6 +27,7 @@ type FieldProps = Pick<
   secureTextEntry?: boolean;
   error?: string | null;
   labelClassName?: string;
+  inputRef?: Ref<TextInput>;
 };
 
 // WCAG 2.2 AA: the label is always visible above the input, so the field never
@@ -38,6 +40,7 @@ export function AuthField({
   error,
   editable = true,
   labelClassName,
+  inputRef,
   ...inputProps
 }: FieldProps) {
   const [hidden, setHidden] = useState(Boolean(secureTextEntry));
@@ -55,9 +58,7 @@ export function AuthField({
       <Text
         nativeID={labelId}
         className={
-          labelClassName
-            ? labelClassName
-            : "mb-2 text-lg font-semibold text-ink"
+          labelClassName ? labelClassName : "mb-2 text-lg font-bold text-ink"
         }
         accessibilityLiveRegion="polite"
       >
@@ -68,7 +69,7 @@ export function AuthField({
           read as a boundary at 3:1. The border thickens on error so the state
           is never colour-only — it also gains a width and an icon. */}
       <View
-        className={`touch-target flex-row items-center rounded-field border-2 bg-input px-4 py-3 ${
+        className={`touch-target flex-row items-center rounded-field border-2 bg-input px-4 py-1.5 ${
           hasError ? "border-error" : "border-inputBorder"
         }`}
       >
@@ -83,19 +84,20 @@ export function AuthField({
           <MaterialCommunityIcons
             name={icon}
             size={26}
-              color="#000000"
+            color="#000000"
             importantForAccessibility="no-hide-descendants"
           />
         )}
         <View className="ml-3 flex-1">
           <TextInput
             {...inputProps}
+            ref={inputRef}
             editable={editable}
             placeholder={hint}
             placeholderTextColor="#404040"
             secureTextEntry={secureTextEntry ? hidden : false}
             className="touch-target text-xl text-ink"
-            style={{ paddingVertical: 10, minHeight: 48, fontSize: 20 }}
+            style={{ paddingVertical: 16, minHeight: 48, fontSize: 20 }}
             accessibilityLabel={label}
             accessibilityHint={hint}
             aria-labelledby={labelId}
@@ -117,7 +119,7 @@ export function AuthField({
             <MaterialCommunityIcons
               name={hidden ? "eye" : "eye-off"}
               size={26}
-            color="#000000"
+              color="#000000"
               importantForAccessibility="no-hide-descendants"
             />
           </Pressable>

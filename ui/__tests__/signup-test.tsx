@@ -1,5 +1,6 @@
 import { Text } from "react-native";
 import {
+  act,
   fireEvent,
   renderRouter,
   screen,
@@ -26,9 +27,11 @@ function renderSignup() {
 
 describe("Signup screen", () => {
   describe("rendering", () => {
-    test("displays the brand logo and app name", async () => {
+    test("displays the brand logo", async () => {
       await renderSignup();
-      expect(screen.getByText("AskSight")).toBeOnTheScreen();
+      expect(
+        screen.getByLabelText("AskSight eye and sparkle logo"),
+      ).toBeOnTheScreen();
     });
 
     test("shows the heading and subtitle", async () => {
@@ -53,9 +56,7 @@ describe("Signup screen", () => {
 
     test("shows the email hint text", async () => {
       await renderSignup();
-      expect(
-        screen.getByPlaceholderText("you@example.com"),
-      ).toBeOnTheScreen();
+      expect(screen.getByPlaceholderText("you@example.com")).toBeOnTheScreen();
     });
 
     test("shows the password hint text", async () => {
@@ -129,7 +130,7 @@ describe("Signup screen", () => {
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(
-        await screen.findByText("Password must be at least 8 characters"),
+        await screen.findByText("Your password must be at least 8 characters."),
       ).toBeOnTheScreen();
       expect(spy).not.toHaveBeenCalled();
     });
@@ -163,7 +164,7 @@ describe("Signup screen", () => {
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(
-        screen.queryByText("Password must be at least 8 characters"),
+        screen.queryByText("Your password must be at least 8 characters."),
       ).toBeNull();
     });
   });
@@ -202,7 +203,14 @@ describe("Signup screen", () => {
         email: "john@example.com",
         password: "hunter2!",
       });
-      await waitFor(() => expect(router.getPathname()).toBe("/home"));
+      const successMessage = await screen.findByText(
+        "Your account is ready. Opening AskSight…",
+      );
+      expect(successMessage).toBeOnTheScreen();
+      expect(successMessage.props.className).toContain("text-success");
+      await waitFor(() => expect(router.getPathname()).toBe("/home"), {
+        timeout: 3000,
+      });
     });
 
     test("trims whitespace from name and email before submitting", async () => {
@@ -225,10 +233,7 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(
-        screen.getByLabelText("Full name"),
-        "  John Doe  ",
-      );
+      fireEvent.changeText(screen.getByLabelText("Full name"), "  John Doe  ");
       fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "  john@example.com  ",
@@ -266,7 +271,40 @@ describe("Signup screen", () => {
       fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       fireEvent.press(screen.getByText("Create account"));
 
-      expect(await screen.findByText("Signing in…")).toBeOnTheScreen();
+      expect(
+        await screen.findByText("Creating your account…"),
+      ).toBeOnTheScreen();
+      expect(
+        screen.getByRole("button", { name: "Creating your account…" }).props
+          .className,
+      ).toContain("bg-warning");
+      expect(
+        screen.getByText("Creating your account…").props.className,
+      ).toContain("text-ink");
+    });
+
+    test("submits only once when the keyboard submits during loading", async () => {
+      const api = require("../src/lib/api");
+      const signupSpy = jest
+        .spyOn(api, "signup")
+        .mockReturnValue(new Promise(() => {}));
+
+      await renderSignup();
+
+      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      fireEvent.press(screen.getByText("Create account"));
+
+      expect(
+        await screen.findByText("Creating your account…"),
+      ).toBeOnTheScreen();
+      fireEvent(screen.getByLabelText("Password"), "submitEditing");
+
+      expect(signupSpy).toHaveBeenCalledTimes(1);
     });
 
     test("surfaces the backend 409 when the email is already registered", async () => {
@@ -287,8 +325,78 @@ describe("Signup screen", () => {
       fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
+      const errorMessage = await screen.findByText(
+        "An Account with this email Already exists",
+      );
+      expect(errorMessage).toBeOnTheScreen();
+      expect(errorMessage.props.className).toContain("text-error");
+    });
+
+    test("ignores the secondary link during the success hold and still opens Home", async () => {
+      const api = require("../src/lib/api");
+      jest.spyOn(api, "signup").mockResolvedValue({
+        id: "1",
+        name: "John Doe",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+      jest
+        .spyOn(api, "login")
+        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "me").mockResolvedValue({
+        id: "1",
+        name: "John Doe",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+
+      const router = await renderSignup();
+
+      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Create account"));
+
+      await screen.findByText("Your account is ready. Opening AskSight…");
+
+      fireEvent.press(screen.getByText("Sign in"));
+      expect(router.getPathname()).toBe("/signup");
+
+      await act(async () => {
+        jest.advanceTimersByTime(600);
+      });
+      await waitFor(() => expect(router.getPathname()).toBe("/home"));
+    });
+
+    test("tells the user to sign in when auto sign-in fails after the account was created", async () => {
+      const api = require("../src/lib/api");
+      jest.spyOn(api, "signup").mockResolvedValue({
+        id: "1",
+        name: "John Doe",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+      jest
+        .spyOn(api, "login")
+        .mockRejectedValue(new TypeError("Network request failed"));
+
+      await renderSignup();
+
+      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Create account"));
+
       expect(
-        await screen.findByText("An Account with this email Already exists"),
+        await screen.findByText(
+          "Your account was created, but we couldn't sign you in automatically. Please sign in.",
+        ),
       ).toBeOnTheScreen();
     });
 
@@ -308,7 +416,7 @@ describe("Signup screen", () => {
 
       expect(
         await screen.findByText(
-          "Unable to create your account. Please try again.",
+          "We couldn't create your account. Please try again.",
         ),
       ).toBeOnTheScreen();
     });

@@ -1,4 +1,4 @@
-import { Image, Text, View } from "react-native";
+import { Image, View } from "react-native";
 
 export function AuthBrand() {
   return (
@@ -9,9 +9,6 @@ export function AuthBrand() {
         accessibilityLabel="AskSight eye and sparkle logo"
         className="h-[128px] w-[192px]"
       />
-      <Text className="mt-3 text-center text-5xl font-bold text-brand">
-        AskSight
-      </Text>
     </View>
   );
 }

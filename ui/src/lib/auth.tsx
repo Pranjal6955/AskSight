@@ -32,9 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string;
     password: string;
   }) {
-    // Signup returns the user but no token, so follow it with a login.
+    // Signup returns the user but no token, so follow it with a login. If the
+    // auto sign-in fails the account already exists — say so instead of
+    // letting a retry hit a confusing "already exists" error.
     await api.signup(creds);
-    await signIn({ email: creds.email, password: creds.password });
+    try {
+      await signIn({ email: creds.email, password: creds.password });
+    } catch {
+      throw new Error(
+        "Your account was created, but we couldn't sign you in automatically. Please sign in.",
+      );
+    }
   }
 
   return (

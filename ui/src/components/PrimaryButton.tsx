@@ -6,6 +6,7 @@ type Props = {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
+  loadingLabel?: string;
 };
 
 export function PrimaryButton({
@@ -13,6 +14,7 @@ export function PrimaryButton({
   onPress,
   loading = false,
   disabled = false,
+  loadingLabel = "Please wait…",
 }: Props) {
   const isDisabled = loading || disabled;
 
@@ -28,7 +30,7 @@ export function PrimaryButton({
       // carried by the accessible label too, never by colour alone.
       className={`touch-target focus-visible:outline-3 flex-row items-center justify-center gap-2 rounded-field px-6 py-4 focus-visible:outline focus-visible:outline-focus ${
         loading
-          ? "bg-brand"
+          ? "bg-warning"
           : isDisabled
             ? "bg-brand-muted"
             : "bg-brand active:bg-brand-deep"
@@ -37,15 +39,15 @@ export function PrimaryButton({
       {loading ? (
         <>
           <ActivityIndicator
-            color="#FFFFFF"
+            color="#000000"
             size="small"
             importantForAccessibility="no-hide-descendants"
           />
           <Text
-            className="text-3xl font-bold text-white"
+            className="text-3xl font-bold text-ink"
             accessibilityLiveRegion="polite"
           >
-            Signing in…
+            {loadingLabel}
           </Text>
         </>
       ) : (

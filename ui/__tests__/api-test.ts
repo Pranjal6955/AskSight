@@ -1,24 +1,32 @@
-import { readError, signup, login, me } from "../src/lib/api";
+import {
+  readError,
+  toFriendlyMessage,
+  signup,
+  login,
+  me,
+} from "../src/lib/api";
 
 const fakeResponse = (status: number, body: unknown) =>
   ({ status, json: async () => body }) as unknown as Response;
 
 describe("readError", () => {
-  test("uses the detail string returned by 401", async () => {
+  test("uses the human detail string returned by 401", async () => {
     const err = await readError(
       fakeResponse(401, { detail: "Invalid email or Password" }),
     );
     expect(err).toBe("Invalid email or Password");
   });
 
-  test("uses the detail string returned by 409", async () => {
+  test("uses the human detail string returned by 409", async () => {
     const err = await readError(
-      fakeResponse(409, { detail: "An Account with this email Already exists" }),
+      fakeResponse(409, {
+        detail: "An Account with this email Already exists",
+      }),
     );
     expect(err).toBe("An Account with this email Already exists");
   });
 
-  test("joins validation issues returned as an array on 422", async () => {
+  test("turns validation issues on 422 into friendly sentences", async () => {
     const err = await readError(
       fakeResponse(422, {
         detail: [
@@ -34,62 +42,108 @@ describe("readError", () => {
       }),
     );
     expect(err).toBe(
-      "String should have at least 2 characters, value is not a valid email address",
+      "Please enter your name. Please enter a valid email address.",
     );
   });
 
-  test("handles a single validation issue in the array", async () => {
+  test("maps a password validation issue to a friendly sentence", async () => {
+    const err = await readError(
+      fakeResponse(422, {
+        detail: [{ loc: ["body", "password"], msg: "String too short" }],
+      }),
+    );
+    expect(err).toBe("Please pick a password with at least 8 characters.");
+  });
+
+  test("deduplicates repeated friendly messages", async () => {
     const err = await readError(
       fakeResponse(422, {
         detail: [
-          { loc: ["body", "password"], msg: "Password too weak" },
+          { loc: ["body", "email"], msg: "value is not a valid email address" },
+          { loc: ["body", "email"], msg: "invalid email" },
         ],
       }),
     );
-    expect(err).toBe("Password too weak");
+    expect(err).toBe("Please enter a valid email address.");
   });
 
-  test("filters out issues without a message", async () => {
-    const err = await readError(
-      fakeResponse(422, {
-        detail: [
-          { loc: ["body", "name"], msg: "Name too short" },
-          { loc: ["body", "email"] },
-        ],
-      }),
-    );
-    expect(err).toBe("Name too short");
-  });
-
-  test("falls back to the status when the body is not JSON", async () => {
+  test("falls back to a friendly sentence when the body is not JSON", async () => {
     const res = {
       status: 502,
       json: async () => {
         throw new Error("not json");
       },
     } as unknown as Response;
-    expect(await readError(res)).toBe("Request failed (502)");
+    expect(await readError(res)).toBe(
+      "AskSight is having trouble right now. Please try again in a moment.",
+    );
   });
 
-  test("falls back to the status when detail is missing", async () => {
+  test("falls back to a friendly sentence when detail is missing on 500", async () => {
     const err = await readError(fakeResponse(500, {}));
-    expect(err).toBe("Request failed (500)");
+    expect(err).toBe(
+      "AskSight is having trouble right now. Please try again in a moment.",
+    );
   });
 
-  test("falls back to the status when detail is an empty array", async () => {
+  test("falls back to a friendly sentence when detail is missing on 401", async () => {
+    const err = await readError(fakeResponse(401, {}));
+    expect(err).toBe("Your session has expired. Please sign in again.");
+  });
+
+  test("falls back to a friendly sentence when detail is missing on 409", async () => {
+    const err = await readError(fakeResponse(409, {}));
+    expect(err).toBe(
+      "An account with this email already exists. Try signing in instead.",
+    );
+  });
+
+  test("falls back to a friendly sentence on an empty validation array", async () => {
     const err = await readError(fakeResponse(422, { detail: [] }));
-    expect(err).toBe("Request failed (422)");
+    expect(err).toBe("Please check the information you entered and try again.");
   });
 
-  test("falls back to the status when detail is an unexpected type", async () => {
+  test("falls back to a friendly sentence when detail is an unexpected type", async () => {
     const err = await readError(fakeResponse(400, { detail: 42 }));
-    expect(err).toBe("Request failed (400)");
+    expect(err).toBe("We couldn't complete that request. Please try again.");
+  });
+});
+
+describe("toFriendlyMessage", () => {
+  const FALLBACK = "We couldn't sign you in. Please try again.";
+
+  test("replaces a network failure with a connection message", () => {
+    expect(
+      toFriendlyMessage(new TypeError("Network request failed"), FALLBACK),
+    ).toBe(
+      "We couldn't connect to AskSight. Check your internet connection and try again.",
+    );
+  });
+
+  test("replaces a fetch failure with a connection message", () => {
+    expect(toFriendlyMessage(new Error("Failed to fetch"), FALLBACK)).toBe(
+      "We couldn't connect to AskSight. Check your internet connection and try again.",
+    );
+  });
+
+  test("keeps an already human message", () => {
+    expect(
+      toFriendlyMessage(new Error("Invalid email or Password"), FALLBACK),
+    ).toBe("Invalid email or Password");
+  });
+
+  test("uses the fallback for non-Error rejections", () => {
+    expect(toFriendlyMessage("network failure", FALLBACK)).toBe(FALLBACK);
+  });
+
+  test("uses the fallback for an empty message", () => {
+    expect(toFriendlyMessage(new Error(""), FALLBACK)).toBe(FALLBACK);
   });
 });
 
 describe("signup", () => {
   test("sends a POST request to /auth/signup with the user data", async () => {
-    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
           id: "1",
@@ -129,9 +183,11 @@ describe("signup", () => {
   });
 
   test("throws an error with the backend message on failure", async () => {
-    jest.spyOn(global, "fetch").mockResolvedValue(
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
-        JSON.stringify({ detail: "An Account with this email Already exists" }),
+        JSON.stringify({
+          detail: "An Account with this email Already exists",
+        }),
         { status: 409, headers: { "Content-Type": "application/json" } },
       ),
     );
@@ -148,12 +204,14 @@ describe("signup", () => {
 
 describe("login", () => {
   test("sends a POST request to /auth/login with credentials", async () => {
-    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ access_token: "abc123", token_type: "bearer" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ access_token: "abc123", token_type: "bearer" }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
 
     const result = await login({
       email: "john@example.com",
@@ -176,7 +234,7 @@ describe("login", () => {
   });
 
   test("throws an error with the backend message on invalid credentials", async () => {
-    jest.spyOn(global, "fetch").mockResolvedValue(
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ detail: "Invalid email or Password" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -191,7 +249,7 @@ describe("login", () => {
 
 describe("me", () => {
   test("sends a GET request to /auth/me with the bearer token", async () => {
-    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
         JSON.stringify({
           id: "1",
@@ -224,11 +282,14 @@ describe("me", () => {
   });
 
   test("throws an error when the token is invalid", async () => {
-    jest.spyOn(global, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ detail: "Could not validate credentials" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      }),
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: "Could not validate credentials" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
 
     await expect(me("bad-token")).rejects.toThrow(

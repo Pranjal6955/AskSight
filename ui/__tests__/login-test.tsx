@@ -1,5 +1,6 @@
 import { Text } from "react-native";
 import {
+  act,
   fireEvent,
   renderRouter,
   screen,
@@ -26,14 +27,16 @@ function renderLogin() {
 
 describe("Login screen", () => {
   describe("rendering", () => {
-    test("displays the brand logo and app name", async () => {
+    test("displays the brand logo", async () => {
       await renderLogin();
-      expect(screen.getByText("AskSight")).toBeOnTheScreen();
+      expect(
+        screen.getByLabelText("AskSight eye and sparkle logo"),
+      ).toBeOnTheScreen();
     });
 
     test("shows the welcome heading and subtitle", async () => {
       await renderLogin();
-      expect(screen.getByText("Welcome back")).toBeOnTheScreen();
+      expect(screen.getByText("Welcome back to AskSight")).toBeOnTheScreen();
       expect(screen.getByText("Sign in to continue")).toBeOnTheScreen();
     });
 
@@ -127,6 +130,45 @@ describe("Login screen", () => {
         email: "john@example.com",
         password: "hunter2!",
       });
+      const successMessage = await screen.findByText(
+        "You're signed in. Opening AskSight…",
+      );
+      expect(successMessage).toBeOnTheScreen();
+      expect(successMessage.props.className).toContain("text-success");
+      await waitFor(() => expect(router.getPathname()).toBe("/home"), {
+        timeout: 3000,
+      });
+    });
+
+    test("ignores the secondary link during the success hold and still opens Home", async () => {
+      const api = require("../src/lib/api");
+      jest
+        .spyOn(api, "login")
+        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "me").mockResolvedValue({
+        id: "1",
+        name: "John Smith",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+
+      const router = await renderLogin();
+
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Sign in"));
+
+      await screen.findByText("You're signed in. Opening AskSight…");
+
+      fireEvent.press(screen.getByText("Create account"));
+      expect(router.getPathname()).toBe("/login");
+
+      await act(async () => {
+        jest.advanceTimersByTime(600);
+      });
       await waitFor(() => expect(router.getPathname()).toBe("/home"));
     });
 
@@ -142,11 +184,41 @@ describe("Login screen", () => {
 
       await renderLogin();
 
-      fireEvent.changeText(screen.getByLabelText("Email address"), "john@example.com");
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
       fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       fireEvent.press(screen.getByText("Sign in"));
 
-      expect(await screen.findByText("Signing in…")).toBeOnTheScreen();
+      expect(await screen.findByText("Signing you in…")).toBeOnTheScreen();
+      expect(
+        screen.getByRole("button", { name: "Signing you in…" }).props.className,
+      ).toContain("bg-warning");
+      expect(screen.getByText("Signing you in…").props.className).toContain(
+        "text-ink",
+      );
+    });
+
+    test("submits only once when the keyboard submits during loading", async () => {
+      const api = require("../src/lib/api");
+      const loginSpy = jest
+        .spyOn(api, "login")
+        .mockReturnValue(new Promise(() => {}));
+
+      await renderLogin();
+
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      fireEvent.press(screen.getByText("Sign in"));
+
+      expect(await screen.findByText("Signing you in…")).toBeOnTheScreen();
+      fireEvent(screen.getByLabelText("Password"), "submitEditing");
+
+      expect(loginSpy).toHaveBeenCalledTimes(1);
     });
 
     test("displays the backend error message on failed sign in", async () => {
@@ -158,9 +230,9 @@ describe("Login screen", () => {
       await renderLogin();
       await fireEvent.press(screen.getByText("Sign in"));
 
-      expect(
-        await screen.findByText("Invalid email or Password"),
-      ).toBeOnTheScreen();
+      const errorMessage = await screen.findByText("Invalid email or Password");
+      expect(errorMessage).toBeOnTheScreen();
+      expect(errorMessage.props.className).toContain("text-error");
     });
 
     test("clears the previous error when retrying", async () => {
@@ -178,7 +250,10 @@ describe("Login screen", () => {
 
       await renderLogin();
 
-      fireEvent.changeText(screen.getByLabelText("Email address"), "john@example.com");
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
       fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Sign in"));
 
@@ -200,7 +275,23 @@ describe("Login screen", () => {
       await fireEvent.press(screen.getByText("Sign in"));
 
       expect(
-        await screen.findByText("Unable to sign in. Please try again."),
+        await screen.findByText("We couldn't sign you in. Please try again."),
+      ).toBeOnTheScreen();
+    });
+
+    test("shows a connection message when the network is down", async () => {
+      const api = require("../src/lib/api");
+      jest
+        .spyOn(api, "login")
+        .mockRejectedValue(new TypeError("Network request failed"));
+
+      await renderLogin();
+      await fireEvent.press(screen.getByText("Sign in"));
+
+      expect(
+        await screen.findByText(
+          "We couldn't connect to AskSight. Check your internet connection and try again.",
+        ),
       ).toBeOnTheScreen();
     });
   });

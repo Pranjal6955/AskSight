@@ -31,6 +31,8 @@ module.exports = {
         },
         accent: "#000000",
         error: "#B42318",
+        success: "#166534",
+        warning: "#FACC15",
         avatar: "#F2F2F2",
         focus: "#000000",
       },
