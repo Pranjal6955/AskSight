@@ -1,9 +1,7 @@
-import { Text, View } from "react-native";
+import { Redirect } from "expo-router";
 
-export default function App() {
-  return (
-    <View className="flex-1 items-center justify-center bg-white">
-      <Text className="text-3xl font-bold text-blue-600">Hello NativeWind</Text>
-    </View>
-  );
+// Auth state is in-memory only (the backend token lives 30 minutes with no
+// refresh endpoint), so a cold start is always signed out.
+export default function Index() {
+  return <Redirect href="/login" />;
 }

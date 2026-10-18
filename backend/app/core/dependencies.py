@@ -8,25 +8,22 @@ from app.db import db
 
 bearer_schema = HTTPBearer()
 
-async def get_current_user(credentials : HTTPAuthorizationCredentials = Depends(bearer_schema)):
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_schema)):
     token = credentials.credentials
 
-    try :
-        payload = jwt.decode(
-            token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM]
-        )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
 
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token")
 
     except InvalidTokenError as err:
-        raise HTTPException(status_code=401,detail = "Invaild or expired token") from err
-    
-    user = await db.user.find_unique(where={"id":user_id})
+        raise HTTPException(status_code=401, detail="Invaild or expired token") from err
+
+    user = await db.user.find_unique(where={"id": user_id})
     if not user:
-        raise HTTPException(status_code = 401, detail = "User not found")
+        raise HTTPException(status_code=401, detail="User not found")
 
     return user
