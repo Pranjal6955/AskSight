@@ -109,7 +109,9 @@ export default function HomeScreen() {
                 onPress={() => router.navigate("/(tabs)/history")}
                 className="min-h-11 flex-row items-center gap-1 rounded-full border border-[#E6E0D7] px-4"
               >
-                <Text className="text-base font-semibold text-ink">See all</Text>
+                <Text className="text-base font-semibold text-ink">
+                  See all
+                </Text>
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={23}

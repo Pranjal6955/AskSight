@@ -89,9 +89,7 @@ describe("Home screen", () => {
     test("greets the signed-in user by first name", async () => {
       mockSignedIn();
       await renderTabs({ signedIn: true });
-      await waitFor(() =>
-        expect(screen.getByText("John!")).toBeOnTheScreen(),
-      );
+      await waitFor(() => expect(screen.getByText("John!")).toBeOnTheScreen());
     });
 
     test("shows the AskSight brand in the home header", async () => {
