@@ -86,38 +86,33 @@ describe("Tabs layout", () => {
 
 describe("Home screen", () => {
   describe("signed in", () => {
-    test("shows the user initials avatar", async () => {
-      mockSignedIn();
-      await renderTabs({ signedIn: true });
-      await waitFor(() => expect(screen.getByText("JS")).toBeOnTheScreen());
-    });
-
-    test("shows the signed-in accessibility label on the avatar", async () => {
+    test("greets the signed-in user by first name", async () => {
       mockSignedIn();
       await renderTabs({ signedIn: true });
       await waitFor(() =>
-        expect(
-          screen.getByLabelText("Signed in as John Smith"),
-        ).toBeOnTheScreen(),
+        expect(screen.getByText("John!")).toBeOnTheScreen(),
       );
-      expect(
-        screen.getByLabelText("Signed in as John Smith").props.accessible,
-      ).toBe(true);
+    });
+
+    test("shows the AskSight brand in the home header", async () => {
+      mockSignedIn();
+      await renderTabs({ signedIn: true });
+      expect(screen.getByLabelText("AskSight")).toBeOnTheScreen();
     });
   });
 
   describe("ask with camera", () => {
-    test("renders the Ask with Camera card", async () => {
+    test("renders the Take a Photo card", async () => {
       await renderTabs();
-      expect(screen.getByText("Ask with Camera")).toBeOnTheScreen();
+      expect(screen.getByText("Take a Photo")).toBeOnTheScreen();
       expect(
         screen.getByText(
-          "Take a photo and get an AI description of your surroundings",
+          "Capture your surroundings and get an AI description.",
         ),
       ).toBeOnTheScreen();
     });
 
-    test("shows the accessibility label for the camera action", async () => {
+    test("shows the accessibility label for the camera card", async () => {
       await renderTabs();
       expect(
         screen.getByLabelText(
@@ -128,9 +123,9 @@ describe("Home screen", () => {
   });
 
   describe("recent history", () => {
-    test("shows the Recent history heading", async () => {
+    test("shows the Recent activity heading", async () => {
       await renderTabs();
-      expect(screen.getByText("Recent history")).toBeOnTheScreen();
+      expect(screen.getByText("Recent activity")).toBeOnTheScreen();
     });
 
     test("shows the empty state", async () => {
@@ -149,6 +144,12 @@ describe("Home screen", () => {
       const router = await renderTabs();
       await fireEvent.press(screen.getByText("See all"));
       await waitFor(() => expect(router.getPathname()).toBe("/history"));
+    });
+
+    test("opens Settings from the header gear button", async () => {
+      const router = await renderTabs();
+      await fireEvent.press(screen.getByLabelText("Open settings"));
+      await waitFor(() => expect(router.getPathname()).toBe("/settings"));
     });
   });
 });

@@ -7,13 +7,7 @@ import { useAuth } from "@/lib/auth";
 
 export default function HomeScreen() {
   const { user } = useAuth();
-  const initials = user?.name
-    .trim()
-    .split(/\s+/)
-    .map((part) => part[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const firstName = user?.name.trim().split(/\s+/)[0] || "there";
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top"]}>
@@ -22,84 +16,128 @@ export default function HomeScreen() {
         contentContainerStyle={{
           flexGrow: 1,
           paddingHorizontal: 24,
-          paddingTop: 24,
-          paddingBottom: 32,
+          paddingTop: 18,
+          paddingBottom: 112,
         }}
       >
         <View className="mx-auto w-full max-w-[560px]">
-          <View className="mb-8 flex-row items-center justify-between">
-            <Text className="text-3xl font-bold text-brand">AskSight</Text>
-            {initials ? (
+          <View className="mb-7 flex-row items-center justify-between">
+            <View
+              className="flex-row items-center gap-3"
+              accessible
+              accessibilityLabel="AskSight"
+            >
               <View
-                accessible
-                className="h-14 w-14 items-center justify-center rounded-full border-2 border-brand bg-card-green"
-                accessibilityLabel={`Signed in as ${user?.name}`}
+                className="h-14 w-14 items-center justify-center rounded-full bg-ink"
+                importantForAccessibility="no-hide-descendants"
               >
-                <Text className="text-xl font-bold text-brand">{initials}</Text>
+                <MaterialCommunityIcons name="eye" size={34} color="#FAF7F0" />
               </View>
-            ) : null}
+              <Text className="text-3xl font-bold tracking-tight text-ink">
+                AskSight
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open settings"
+              onPress={() => router.navigate("/(tabs)/settings")}
+              className="h-14 w-14 items-center justify-center rounded-full bg-[#F0ECE4]"
+              hitSlop={8}
+            >
+              <MaterialCommunityIcons name="cog" size={30} color="#111111" />
+            </Pressable>
+          </View>
+
+          <View className="mb-6">
+            <Text className="text-[23px] leading-8 text-[#292929]">Hello,</Text>
+            <Text
+              accessibilityRole="header"
+              className="text-[48px] font-bold leading-[54px] tracking-tight text-ink"
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
+              {firstName}!
+            </Text>
+            <Text className="mt-3 max-w-[480px] text-[22px] leading-[30px] text-[#303030]">
+              Take a photo and let AskSight describe what you see.
+            </Text>
           </View>
 
           <View
-            className="min-h-[132px] flex-row items-center gap-4 rounded-card border-2 border-brand bg-brand p-5"
+            className="min-h-[255px] overflow-hidden rounded-[30px] bg-ink px-6 py-7"
+            accessibilityRole="summary"
             accessibilityLabel="Ask with Camera. Take a photo and get an AI description of your surroundings"
           >
             <View
-              className="h-14 w-14 items-center justify-center rounded-full bg-brand-deep"
+              className="absolute -bottom-10 -right-10 h-56 w-56 rounded-full border-[18px] border-[#171717]"
               importantForAccessibility="no-hide-descendants"
-            >
-              <MaterialCommunityIcons
-                name="camera-outline"
-                size={30}
-                color="#FFFFFF"
-              />
-            </View>
-            <View className="flex-1">
-              <Text className="text-2xl font-bold leading-8 text-white">
-                Ask with Camera
+            />
+            <View
+              className="absolute -bottom-10 -right-10 h-44 w-44 rounded-full border-[14px] border-[#202020]"
+              importantForAccessibility="no-hide-descendants"
+            />
+            <View className="flex-1 items-center justify-center">
+              <View
+                className="mb-4 h-[82px] w-[104px] items-center justify-center rounded-[24px] bg-white"
+                importantForAccessibility="no-hide-descendants"
+              >
+                <MaterialCommunityIcons
+                  name="camera"
+                  size={55}
+                  color="#111111"
+                />
+              </View>
+              <Text className="text-center text-[30px] font-bold leading-9 text-white">
+                Take a Photo
               </Text>
-              <Text className="mt-2 text-lg leading-7 text-white">
-                Take a photo and get an AI description of your surroundings
+              <Text className="mt-2 max-w-[330px] text-center text-[18px] leading-[25px] text-[#E1E1E1]">
+                Capture your surroundings and get an AI description.
               </Text>
             </View>
           </View>
 
-          <View className="mt-10">
+          <View className="mt-7">
             <View className="flex-row items-center justify-between">
               <Text
                 accessibilityRole="header"
-                className="text-2xl font-bold text-ink"
+                className="text-[25px] font-bold tracking-tight text-ink"
               >
-                Recent history
+                Recent activity
               </Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.navigate("/(tabs)/history")}
-                className="touch-target justify-center rounded-field px-3"
+                className="min-h-11 flex-row items-center gap-1 rounded-full border border-[#E6E0D7] px-4"
               >
-                <Text className="text-lg font-bold text-brand-link">
-                  See all
-                </Text>
+                <Text className="text-base font-semibold text-ink">See all</Text>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={23}
+                  color="#111111"
+                  importantForAccessibility="no-hide-descendants"
+                />
               </Pressable>
             </View>
 
-            <View className="mt-4 items-center rounded-card border-2 border-inputBorder bg-white px-6 py-8">
+            <View className="mt-3 min-h-[112px] flex-row items-center gap-4 rounded-[22px] bg-white/70 px-5 py-5">
               <View
-                className="h-16 w-16 items-center justify-center rounded-full bg-card-green"
+                className="h-14 w-14 items-center justify-center rounded-full bg-[#F0ECE4]"
                 importantForAccessibility="no-hide-descendants"
               >
                 <MaterialCommunityIcons
                   name="history"
-                  size={32}
-                  color="#000000"
+                  size={28}
+                  color="#111111"
                 />
               </View>
-              <Text className="mt-5 text-2xl font-bold text-ink">
-                No questions yet
-              </Text>
-              <Text className="mt-2 text-center text-lg leading-7 text-muted">
-                Your past questions will appear here.
-              </Text>
+              <View className="flex-1">
+                <Text className="text-lg font-bold text-ink">
+                  No questions yet
+                </Text>
+                <Text className="mt-1 text-base leading-6 text-[#666666]">
+                  Your past questions will appear here.
+                </Text>
+              </View>
             </View>
           </View>
         </View>
