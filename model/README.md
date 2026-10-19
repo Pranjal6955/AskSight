@@ -62,6 +62,72 @@ python -m asksight_model.evaluate --checkpoint checkpoints/v0.1 --split test
 python -c "from asksight_model import LocalInferenceService; s = LocalInferenceService('checkpoints/v0.1')"
 ```
 
+## Training runs
+
+Two supported paths, same code: a CPU **smoke run** that verifies the pipeline, and
+a GPU **full run** (Colab/Kaggle) that produces the demo-quality checkpoint.
+
+### Smoke run — laptop CPU (pipeline check)
+
+Same code path at small scale: dataset → training → checkpoint end to end. The
+first run downloads the pinned backbones once (~4 GB) into the Hugging Face
+cache; later runs start instantly.
+
+```bash
+python -m asksight_model.train \
+  --config configs/default.yaml \
+  --device cpu --limit 100 --version v0.1-smoke
+```
+
+Desired output (loss values are illustrative — they vary per run and hardware;
+the *shape* is what matters):
+
+```
+epoch 0 step 0: loss 5.1...
+epoch 0 step 10: loss 2.9...
+{"epoch": 0, "train_loss": 2.2, "val_loss": 1.9, "seconds": 412.0}
+{"epoch": 1, "train_loss": 1.5, "val_loss": 1.4, "seconds": 405.0}
+checkpoint saved to checkpoints/v0.1-smoke
+```
+
+Success criteria:
+
+- `train_loss` trends down across steps and `val_loss` follows it (if `val_loss`
+  climbs while `train_loss` falls, note it in the PR — overfitting signal).
+- `checkpoints/v0.1-smoke/` contains `projector.safetensors`, `config.yaml`,
+  `metrics.json`, `data_meta.json`.
+- Roughly 5–15 minutes of CPU time at `--limit 100`, backbone download excluded.
+
+This checkpoint exists to prove the machinery works. Its answers are weak — it
+saw 100 questions; do not demo it.
+
+### Full run — Google Colab T4 (recommended)
+
+`model/notebooks/colab_train.ipynb` (committed to the repo so Colab can clone it):
+
+1. Upload the notebook to Colab (File → Upload notebook) and **Runtime → Run all**.
+2. Defaults: `VERSION=v0.1-colab`, 2000/250/250 questions, `DTYPE=float16`
+   (free T4s have no native bf16), `SEED=0`.
+3. Roughly 30–40 minutes total; the final cell downloads the checkpoint zip.
+
+Desired output (abridged):
+
+```
+train: 2003 questions, 365 images        # data cell; meta.json fingerprints follow
+epoch 0 step 0: loss ...                 # ~500 steps/epoch at batch 4
+{"epoch": 0, "train_loss": ..., "val_loss": ...}
+checkpoint saved to checkpoints/v0.1-colab
+{"split": "test", ..., "vqa_accuracy": 0.xx, "latency_median_s": ...}   # evaluate cell
+VQA accuracy: xx.x% | latency median ...s, p95 ...s                    # summary cell
+v0.1-colab-ckpt.zip                                      # downloaded deliverable (~5 MB)
+```
+
+Success criteria: `vqa_accuracy` printed from the held-out test split (this is
+the headline number), latency recorded, and a checkpoint folder matching the
+contents listed in "Training and checkpoints (B4)" above. Colab runtimes are
+ephemeral — the zip is the saved result. If a quality bump is needed later,
+train the fuller subset (`--train 20000`, 3–6 h) on Kaggle or Colab Pro.
+
 ## Data pipeline (B3)
 
 `python -m asksight_model.data` downloads the official VQA v2 question and
