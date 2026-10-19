@@ -24,7 +24,8 @@ packages = ["asksight_model"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = [".venv"]
+# notebooks/ runs in Colab; shell magics (`!pip`, `!nvidia-smi`) are not lintable Python
+extend-exclude = [".venv", "notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
