@@ -1,0 +1,28 @@
+# AskSight model configuration (Track B).
+#
+# Backbones are pinned by revision hash for reproducibility. Training runs on a
+# remote GPU (see model/README.md); these defaults assume ~16 GB VRAM with
+# gradient checkpointing enabled.
+
+model:
+  version: untrained
+  vision_model: openai/clip-vit-base-patch32
+  vision_revision: 3d74acf9a28c67741b2f4f2ea7635f0aaf6f0268
+  lm_model: Qwen/Qwen2.5-1.5B-Instruct
+  lm_revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+  connector_hidden: null        # default: LM hidden size
+  max_new_tokens: 24
+
+train:
+  data_dir: data/vqa
+  out_dir: checkpoints
+  version: v0.1
+  epochs: 2
+  batch_size: 4
+  lr: 0.0005
+  weight_decay: 0.0
+  seed: 0
+  device: auto
+  dtype: auto
+  gradient_checkpointing: true
+  limit: null
