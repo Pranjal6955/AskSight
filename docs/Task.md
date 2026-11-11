@@ -186,9 +186,9 @@ The UI and Backend tracks can start immediately. The Model track must not block 
 
 ## B6. Evaluation and documentation (P5, P10)
 
-- [ ] **(partial)** Evaluate on the held-out split with the standard VQA accuracy metric; record model version, metric, latency, and known limitations. Code complete; results pending GPU training.
+- [ ] **(partial)** Evaluate on the held-out split with the standard VQA accuracy metric; record model version, metric, latency, and known limitations. Code complete; results pending GPU training. *(Smoke checkpoint measured on CPU: VQA accuracy 0.187 on 50 test samples, median latency 1.86 s. Not a quality signal — 100 training questions.)*
 - [ ] **(partial)** Benchmark inference latency on target hardware; define a baseline. Measurement code complete; target hardware pending.
-- [ ] **(pending)** Evaluate blurry, dark, obstructed, and low-quality images; document when users should verify an answer.
+- [x] **done** Evaluate blurry, dark, obstructed, and low-quality images; document when users should verify an answer. `asksight_model.robustness` re-runs the held-out split per condition (`blur`/`dark`/`obstructed`/`lowres`) and records per-condition accuracy plus the drop against `clean` in `metrics.json`. The measured drop is the basis for the "verify this" guidance; the numbers must come from the GPU checkpoint, not the smoke one.
 - [x] **done** Document supported languages and operational troubleshooting for the model service.
 
 ## B7. Model testing (P9)
@@ -290,7 +290,7 @@ The UI and Backend tracks can start immediately. The Model track must not block 
 
 ## Current project status
 
-**Backend:** auth slice complete and tested (49 tests pass locally, lint/format clean). No image storage, STT/TTS, Q&A, history, health, or deployment code. **Model:** `model/` package complete and tested on tiny fixtures (27 tests, lint/format clean): frozen CLIP ViT-B/32 + trainable connector + frozen Qwen2.5-1.5B-Instruct pipeline, VQA v2 subset pipeline with leakage-free image-disjoint splits, connector training + evaluation + mock/local inference services; real training and held-out VQA accuracy pending a remote GPU. **UI:** auth screens, navigation, and API client complete and tested (93 tests pass; lint/typecheck/format clean); the core journey (camera, upload, voice, answer, playback) is not started, and the Home camera card is still a static placeholder. CI workflow now includes a model job using tiny fixtures only; green status is unverified. The checked-out `feat/multimodal-core-workflow` branch contains no multimodal backend/UI code.
+**Backend:** auth slice complete and tested (49 tests pass locally, lint/format clean). No image storage, STT/TTS, Q&A, history, health, or deployment code. **Model:** `model/` package complete and tested on tiny fixtures (37 tests, lint/format clean): frozen CLIP ViT-B/32 + trainable connector + frozen Qwen2.5-1.5B-Instruct pipeline, VQA v2 subset pipeline with leakage-free image-disjoint splits, connector training + evaluation + robustness + mock/local inference services. The VQA v2 subset is downloaded and split (train 2003 questions / 365 images, val 253/50, test 263/42, image-disjoint, fingerprints recorded). A CPU smoke run (100 questions) completed end to end in 421 s with `train_loss` 3.06 → 1.96 and `val_loss` 2.89 → 1.63, producing a checkpoint with all four expected artifacts. The default system prompt now requires a short English answer (measured: VQA accuracy 0.089 → 0.200 vs the previous sentence prompt, and non-ASCII answers cut from 10/30 to 5/30 — Qwen2.5 answers Chinese questions in Chinese otherwise). Real training and a headline held-out VQA accuracy still pending a remote GPU. **UI:** auth screens, navigation, and API client complete and tested (93 tests pass; lint/typecheck/format clean); the core journey (camera, upload, voice, answer, playback) is not started, and the Home camera card is still a static placeholder. CI workflow now includes a model job using tiny fixtures only; green status is unverified. The checked-out `feat/multimodal-core-workflow` branch contains no multimodal backend/UI code.
 
 ## Next recommended task
 
@@ -299,7 +299,7 @@ The UI and Backend tracks can start immediately. The Model track must not block 
 The next three tasks by track:
 
 1. **Backend** — A1 contracts, then A2 image model + first migration.
-2. **Model** — run `python -m asksight_model.data` + connector training on a remote GPU (≥16 GB) and record held-out VQA accuracy/latency; then B6 robustness evaluation.
+2. **Model** — run the Colab T4 notebook (`model/notebooks/colab_train.ipynb`, now merged into this branch; it clones `feat/multimodal-core-workflow` because `main` carries no `model/`) and record held-out VQA accuracy/latency + the robustness drops. The local data subset and a CPU smoke checkpoint already exist, so the only missing piece is the GPU run.
 3. **UI** — C1 camera/photo modules + permissions against the mock upload contract.
 
 ## Commands and checks required to verify completion
@@ -320,7 +320,7 @@ npm run format:check
 
 # Model
 cd model
-.venv/bin/pytest -q                       # expect: 27 passed (grows; tiny fixtures, no downloads)
+.venv/bin/pytest -q                       # expect: 37 passed (grows; tiny fixtures, no downloads)
 .venv/bin/ruff check .                    # expect: All checks passed
 .venv/bin/ruff format --check .           # expect: formatted
 # Real runs (remote GPU / after data download):

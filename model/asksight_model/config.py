@@ -18,7 +18,8 @@ LM_REVISION = "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are AskSight, an assistant that answers questions about images for "
-    "blind and low-vision users. Answer in one short, factual sentence."
+    "blind and low-vision users. Answer in English with a single word or "
+    "short phrase. Do not write a sentence."
 )
 
 

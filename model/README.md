@@ -2,7 +2,7 @@
 
 LLaVA-style visual question answering: a frozen CLIP vision encoder, a small
 trainable projection connector, and a frozen instruction-tuned language model.
-Only the connector is trained; a checkpoint is a few MB plus its config.
+Only the connector is trained; a checkpoint is ~14 MB plus its config.
 
 ```
 image -> CLIP (frozen) -> connector (trained) -> spliced into LM embeddings -> Qwen2.5 (frozen) -> answer
@@ -58,6 +58,9 @@ python -m asksight_model.train --config configs/default.yaml
 # 3. Evaluate on the held-out test split (VQA accuracy + latency).
 python -m asksight_model.evaluate --checkpoint checkpoints/v0.1 --split test
 
+# 3b. Same split under capture faults (blur/dark/obstructed/low-res).
+python -m asksight_model.robustness --checkpoint checkpoints/v0.1 --split test
+
 # 4. Serve (Track A imports this):
 python -c "from asksight_model import LocalInferenceService; s = LocalInferenceService('checkpoints/v0.1')"
 ```
@@ -98,6 +101,10 @@ Success criteria:
   `metrics.json`, `data_meta.json`.
 - Roughly 5–15 minutes of CPU time at `--limit 100`, backbone download excluded.
 
+Verified on a CPU-only machine (11 Nov 2026): 421 s total (214.5 s + 206.5 s),
+`train_loss` 3.06 → 1.96 and `val_loss` 2.89 → 1.63, all four checkpoint files
+written, split fingerprints recorded.
+
 This checkpoint exists to prove the machinery works. Its answers are weak — it
 saw 100 questions; do not demo it.
 
@@ -119,8 +126,11 @@ epoch 0 step 0: loss ...                 # ~500 steps/epoch at batch 4
 checkpoint saved to checkpoints/v0.1-colab
 {"split": "test", ..., "vqa_accuracy": 0.xx, "latency_median_s": ...}   # evaluate cell
 VQA accuracy: xx.x% | latency median ...s, p95 ...s                    # summary cell
-v0.1-colab-ckpt.zip                                      # downloaded deliverable (~5 MB)
+v0.1-colab-ckpt.zip                                      # downloaded deliverable (~14 MB)
 ```
+
+The notebook clones `feat/multimodal-core-workflow` — `main` does not carry
+`model/` yet, so a plain default-branch clone would fail at `%cd AskSight/model`.
 
 Success criteria: `vqa_accuracy` printed from the held-out test split (this is
 the headline number), latency recorded, and a checkpoint folder matching the
@@ -175,6 +185,31 @@ official answer normalization from the VQA v2 evaluation code is ported in
 are recorded in `metrics.json` per checkpoint version. Latency is
 hardware-dependent — record it on the target deployment hardware.
 
+`python -m asksight_model.robustness` re-runs the same held-out split under one
+realistic capture fault per condition — `clean`, `blur`, `dark`, `obstructed`,
+`lowres` — and records per-condition accuracy and the drop against `clean` in
+`metrics.json` under `eval_robustness`. That drop is the measured basis for the
+"please verify this" guidance shown to a user; with the smoke checkpoint the
+numbers are noise, so only trust them from a full GPU run.
+
+## Prompt
+
+The default system prompt asks for **English, one word or a short phrase**.
+Measured on the smoke checkpoint against the held-out split
+(`experiment_prompts.py`, 30 samples):
+
+| prompt | VQA accuracy | answers with non-ASCII characters |
+|---|---|---|
+| one short sentence | 0.089 | 10/30 |
+| **English, short phrase** | **0.200** | 5/30 |
+| English, one short sentence | 0.122 | 7/30 |
+
+Two reasons: VQA accuracy rewards a bare answer over a sentence, and the
+English requirement matters because Qwen2.5 is natively bilingual and will
+answer in Chinese for an English question — which the English-only TTS layer
+would then read out badly. Re-run `experiment_prompts.py` against a real
+checkpoint to confirm the ordering holds.
+
 ## Inference service (B5)
 
 All services satisfy `{model_version: str, answer(image: PIL.Image, question: str) -> str}`:
@@ -190,12 +225,13 @@ All services satisfy `{model_version: str, answer(image: PIL.Image, question: st
 
 ## Ambiguity, quality, and operational notes
 
-- The model is trained on a VQA subset and answers in one short sentence
-  (good for TTS). Answers can be plausibly wrong — blurry, dark, or obscured
-  images should be flagged to the user as "verify this" (Track B6 follow-up;
-  the current service cannot detect these cases).
-- Language: VQA v2 is English-only. Multilingual support belongs to the
-  Sarvam STT/TTS layer (Track A), which can translate around the English VQA core.
+- The model is trained on a VQA subset and answers in English with a short
+  phrase (good for TTS). Answers can be plausibly wrong — blurry, dark, or
+  obscured images should be flagged to the user as "verify this"; the
+  `robustness` module measures how much each fault costs in accuracy.
+- Language: VQA v2 is English-only, and so is the model's output. Multilingual
+  support belongs to the Sarvam STT/TTS layer (Track A), which can translate
+  around the English VQA core.
 - Ambiguous questions yield a short guess, not a clarification, unless the
   output is empty. A clarification heuristic beyond the empty-output guard
   needs evaluation first.
