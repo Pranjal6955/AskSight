@@ -27,6 +27,16 @@ Point your camera at a menu, a label, a sign, or anything else — ask a questio
 | AI/ML | PyTorch + Hugging Face Transformers + CLIP + bitsandbytes |
 | Database | PostgreSQL |
 
+## Training
+
+The model lives in `model/` and is trained in two ways — same code, different scale:
+
+- **Smoke run (any laptop, CPU, ~10 min)** — verifies dataset → training → checkpoint end to end:
+  `python -m asksight_model.train --config configs/default.yaml --device cpu --limit 100 --version v0.1-smoke`
+- **Full run (free Colab T4, ~40 min)** — the demo-quality checkpoint via `model/notebooks/colab_train.ipynb` (upload to Colab, Run all, checkpoint zip downloads at the end)
+
+Expected outputs for both, plus serving instructions, are documented in [`model/README.md`](model/README.md#training-runs). Point the backend at a checkpoint with `ASKSIGHT_MODEL_CHECKPOINT=<dir>`.
+
 ## How It Works
 
 1. User captures/uploads an image and asks a question by voice.

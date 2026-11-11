@@ -34,6 +34,33 @@ jobs:
       - name: Test
         run: pytest -q
 
+  model:
+    name: Model
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: model
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+      - name: Test
+        run: pytest -q
+        # Tests use tiny local fixtures; no model checkpoints are downloaded.
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
