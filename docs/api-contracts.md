@@ -377,10 +377,13 @@ owned by another user.
 
 ### `DELETE /history/{entry_id}`
 
-Deletes the entry **and** its stored image bytes. **204** on success. **404**
-— unknown id or owned by another user.
+Deletes the entry. **204** on success. **404** — unknown id or owned by
+another user.
 
-Deleting the last entry that references an image also deletes the image.
+The image is **not** deleted with the entry: a user who deletes one question
+may still want to ask another about the same photo. The image is removed when
+no entry references it any more, when it passes its 24-hour expiry, or when
+the user deletes everything.
 
 ### `DELETE /history`
 

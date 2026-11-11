@@ -1,7 +1,7 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Looking for ways to speed up your queries, or to scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
@@ -22,4 +22,47 @@ model User {
   password String
   createdAt DateTime @default(now())
 
+  images  Image[]
+  history HistoryEntry[]
+}
+
+// A photo the user captured. The bytes live in storage under an opaque key;
+// this row holds only metadata and ownership.
+model Image {
+  id String @id @default(cuid())
+  ownerId String
+  // Opaque, never derived from a user-supplied filename.
+  storageKey String @unique
+  mimeType String
+  sizeBytes Int
+  width Int
+  height Int
+  createdAt DateTime @default(now())
+  // Storage bytes are removed after this instant.
+  expiresAt DateTime
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  history HistoryEntry[]
+
+  @@index([ownerId])
+  @@index([expiresAt])
+}
+
+// One question asked about one image, and the answer that was given.
+model HistoryEntry {
+  id String @id @default(cuid())
+  ownerId String
+  imageId String
+  question String
+  answer String
+  // The checkpoint that produced the answer, so it can always be traced.
+  modelVersion String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  image Image @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
+  @@index([expiresAt])
 }

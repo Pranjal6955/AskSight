@@ -9,9 +9,10 @@ import importlib
 import os
 from functools import lru_cache
 
+from app.core.images import MAX_IMAGE_BYTES as MAX_IMAGE_BYTES
+
 MODEL_CHECKPOINT_ENV = "ASKSIGHT_MODEL_CHECKPOINT"
 MAX_QUESTION_CHARS = 500
-MAX_IMAGE_BYTES = 10 * 1024 * 1024  # PRD: 10 MB upload limit
 
 
 class DevMockInferenceService:
