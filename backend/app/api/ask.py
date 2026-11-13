@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -36,6 +37,7 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
     """Answer a question about an image and append the exchange to history."""
     record = await owned_image(payload.image_id, current_user.id)
 
+    started = time.perf_counter()
     data = get_storage().read(record.storageKey)
     if data is None:
         # The row outlived its bytes; say so and let the user re-upload.
@@ -45,6 +47,7 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
     except ValueError:
         # Stored bytes that no longer decode are just as gone as missing ones.
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=GONE) from None
+    decode_ms = round((time.perf_counter() - started) * 1000, 1)
 
     try:
         service = get_inference_service()
@@ -69,8 +72,10 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+    inference_ms = round((time.perf_counter() - started) * 1000, 1)
 
     model_version = service.model_version
+    persist_started = time.perf_counter()
     try:
         entry = await db.historyentry.create(
             data={
@@ -92,6 +97,19 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=NOT_SAVED
         ) from None
+    persist_ms = round((time.perf_counter() - persist_started) * 1000, 1)
+
+    # Phase timings only — no question or answer text ever reaches the logs.
+    logger.info(
+        "ask_timings request_id=%s image_id=%s decode_ms=%s inference_ms=%s"
+        " persist_ms=%s total_ms=%s",
+        get_request_id(),
+        record.id,
+        decode_ms,
+        inference_ms,
+        persist_ms,
+        round((time.perf_counter() - started) * 1000, 1),
+    )
 
     return AskResponse(
         entry_id=entry.id,

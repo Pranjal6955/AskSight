@@ -1,13 +1,19 @@
 """Image upload, retrieval, and deletion (A2/A3)."""
 
+import logging
+import time
+
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 
 from app.core import images as image_checks
 from app.core.dependencies import get_current_user
+from app.core.middleware import get_request_id
 from app.core.rate_limit import per_user
 from app.core.storage import get_storage
 from app.db import db
 from app.schema.images import ImageResponse
+
+logger = logging.getLogger("asksight.api")
 
 router = APIRouter(prefix="/images", tags=["Images"])
 
@@ -34,6 +40,7 @@ async def upload_image(
     current_user=Depends(get_current_user),
     file: UploadFile = File(...),
 ):
+    started = time.perf_counter()
     # Read one byte past the limit: the rest of a valid upload is decoded
     # anyway, and an oversized one never enters memory beyond this point.
     data = await file.read(image_checks.MAX_IMAGE_BYTES + 1)
@@ -49,9 +56,11 @@ async def upload_image(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+    decode_ms = round((time.perf_counter() - started) * 1000, 1)
 
     storage = get_storage()
     key = storage.save(data, image_checks.extension_for(mime_type))
+    storage_ms = round((time.perf_counter() - started) * 1000, 1) - decode_ms
     try:
         record = await db.image.create(
             data={
@@ -67,6 +76,18 @@ async def upload_image(
         # Never leave orphaned bytes behind when the row cannot be saved.
         storage.delete(key)
         raise
+    db_ms = round((time.perf_counter() - started) * 1000, 1) - decode_ms - storage_ms
+
+    # Phase timings only — no filenames or other request content in the logs.
+    logger.info(
+        "upload_timings request_id=%s image_id=%s decode_ms=%s storage_ms=%s db_ms=%s total_ms=%s",
+        get_request_id(),
+        record.id,
+        decode_ms,
+        storage_ms,
+        db_ms,
+        round((time.perf_counter() - started) * 1000, 1),
+    )
 
     return ImageResponse(
         id=record.id,

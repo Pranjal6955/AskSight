@@ -181,6 +181,15 @@ class TestAsk(AskApiTestCase):
         self.assertEqual(res.status_code, 422)
         self.assertEqual(res.json()["detail"], "question not answerable")
 
+    def test_logs_phase_timings_without_any_content(self):
+        image_id = self.upload()
+        with self.assertLogs("asksight.api", level="INFO") as logs:
+            self.ask(image_id, question="What does the letter say?")
+        joined = "\n".join(logs.output)
+        self.assertIn("ask_timings", joined)
+        self.assertIn("inference_ms", joined)
+        self.assertNotIn("What does the letter say?", joined)
+
     def test_persistence_failure_is_500_without_logging_content(self):
         image_id = self.upload()
         broken = AsyncMock(side_effect=RuntimeError("db down"))

@@ -72,6 +72,15 @@ class TestUpload(ImagesApiTestCase):
         self.assertEqual(self.upload(headers={}).status_code, 401)
         self.assertEqual(len(self.db.image.records), 0)
 
+    def test_logs_upload_timings_without_content(self):
+        with self.assertLogs("asksight.api", level="INFO") as logs:
+            res = self.upload()
+        self.assertEqual(res.status_code, 201)
+        joined = "\n".join(logs.output)
+        self.assertIn("upload_timings", joined)
+        self.assertIn("storage_ms", joined)
+        self.assertNotIn("photo.png", joined)
+
     def test_rejects_non_image_bytes_with_422_and_stores_nothing(self):
         res = self.upload(data=b"not an image")
         self.assertEqual(res.status_code, 422)
