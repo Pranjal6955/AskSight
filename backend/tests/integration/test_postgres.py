@@ -34,15 +34,20 @@ def free_port() -> int:
         return sock.getsockname()[1]
 
 
-def wait_for_port(port: int) -> None:
+def wait_for_postgres(container: str) -> None:
+    # Not a bare TCP probe: docker-proxy binds the host port before Postgres
+    # finishes initdb, so an open socket is a false positive (P1001 later).
+    # pg_isready inside the container only exits 0 once the server answers.
     deadline = time.time() + STARTUP_TIMEOUT_SECONDS
     while time.time() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=1):
-                return
-        except OSError:
-            time.sleep(0.25)
-    pytest.fail("postgres container never became reachable")
+        probe = subprocess.run(
+            [docker, "exec", container, "pg_isready", "-U", "postgres", "-d", POSTGRES_DB],
+            capture_output=True,
+        )
+        if probe.returncode == 0:
+            return
+        time.sleep(0.25)
+    pytest.fail("postgres container never became ready")
 
 
 @pytest.fixture(scope="module")
@@ -74,7 +79,7 @@ def fresh_database():
 
     previous_url = os.environ.get("DATABASE_URL")
     try:
-        wait_for_port(port)
+        wait_for_postgres(container)
 
         # Fresh database: an empty schema plus this repo's migrations.
         prisma = Path(sys.executable).parent / "prisma"
