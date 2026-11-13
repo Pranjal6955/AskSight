@@ -38,9 +38,10 @@ AskSight consists of three core computational boundaries:
 
 Prior to creating this plan, both codebase modules were audited and verified:
 - **Backend**:
-  - 166 unit tests passing (`166 passed`) plus a fresh-Postgres integration
-    test that runs wherever Docker is available (CI), proving the init
-    migration applies to an empty database.
+  - 191 unit tests passing (`191 passed`, plus 2 environment-gated skips:
+    the fresh-Postgres integration test needs Docker, the real Sarvam smoke
+    test needs `SARVAM_API_KEY`), proving the init migration applies to an
+    empty database.
   - Code hygiene, ruff linter checks passing cleanly.
   - Pluggable storage abstraction verified: `LocalStorage` for local dev/testing, `S3Storage` (via `boto3`) for production.
   - Keyset pagination, session rotation, security tokens, request tracing (`x-request-id`), structured logging, per-phase latency logs, rate limits, and `/health/live` & `/health/ready` endpoints operational.

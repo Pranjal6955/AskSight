@@ -8,7 +8,7 @@ load_dotenv()
 
 from fastapi import FastAPI  # noqa: E402
 
-from app.api import ask, auth, health, history, images  # noqa: E402
+from app.api import ask, auth, health, history, images, speech  # noqa: E402
 from app.core.middleware import RequestContextMiddleware, setup_logging  # noqa: E402
 from app.db import db  # noqa: E402
 
@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     application.include_router(images.router)
     application.include_router(ask.router)
     application.include_router(history.router)
+    application.include_router(speech.router)
     return application
 
 

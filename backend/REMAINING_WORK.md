@@ -77,17 +77,27 @@ authentication and prototype visual-Q&A endpoint to a production-ready API.
 
 ### 4. Sarvam speech services
 
-- [ ] Verify current Sarvam STT/TTS model names, limits, supported languages,
-  and response formats before implementation.
-- [ ] Add a dedicated STT service using `SARVAM_API_KEY`.
-- [ ] Add an authenticated multipart transcription endpoint.
-- [ ] Validate audio format, duration, and size.
-- [ ] Add a dedicated TTS service and authenticated speech-generation endpoint.
-- [ ] Return playable audio bytes or a short-lived URL rather than large base64
-  JSON responses.
-- [ ] Handle provider timeouts, rate limits, unsupported languages/voices, and
-  provider failures.
-- [ ] Add mocked provider tests and opt-in real-provider smoke tests.
+- [x] Verify current Sarvam STT/TTS model names, limits, supported languages,
+  and response formats before implementation. (Verified against docs.sarvam.ai
+  in Nov 2026: `POST /speech-to-text` multipart → `{transcript, language_code}`;
+  `POST /text-to-speech` JSON → `{audios: [base64]}`; models `saaras:v4` and
+  `bulbul:v4-flash`; auth header `api-subscription-key`.)
+- [x] Add a dedicated STT service using `SARVAM_API_KEY`. (`app/core/speech.py`
+  — factory returns None without a key; typed provider errors.)
+- [x] Add an authenticated multipart transcription endpoint. (`POST /stt`,
+  per-user rate limited.)
+- [x] Validate audio format, duration, and size. (15 MB cap + magic-byte
+  format check locally; duration is bounded by the provider's synchronous
+  REST path, which rejects over-long audio as a provider 4xx → our 422.)
+- [x] Add a dedicated TTS service and authenticated speech-generation
+  endpoint. (`POST /tts`, per-user rate limited.)
+- [x] Return playable audio bytes or a short-lived URL rather than large base64
+  JSON responses. (Raw `audio/mpeg` bytes; speech is never stored.)
+- [x] Handle provider timeouts, rate limits, unsupported languages/voices, and
+  provider failures. (504 / 429 / 422 / 502 mapping, 503 without a key.)
+- [x] Add mocked provider tests and opt-in real-provider smoke tests.
+  (`tests/test_api_speech.py`; the smoke test runs only when
+  `SARVAM_API_KEY` is set.)
 
 ### 5. History and data management
 
@@ -100,28 +110,37 @@ authentication and prototype visual-Q&A endpoint to a production-ready API.
 
 - [x] Add liveness and readiness endpoints; readiness must verify database
   connectivity without exposing secrets.
-- [ ] Add rate limits and request/time limits for auth, uploads, STT, TTS, and
-  inference. (Done for inference: `/ask` is capped at 30 s. The rest —
-  especially rate limits — is open.)
+- [x] Add rate limits and request/time limits for auth, uploads, STT, TTS, and
+  inference. (In-memory sliding window: 10/min per IP on auth, 30/min per
+  user on `/images`, `/ask`, `/stt`, `/tts`; `/ask` capped at 30 s; size
+  caps on uploads. Per process — see the `--workers` caveat in
+  `docs/deployment.md`.)
 - [x] Add structured logs with request IDs and no secrets or raw user content.
-- [ ] Add PostgreSQL integration-test setup and teardown. (Unit/API tests run
-  against an in-memory fake; a real-Postgres harness is still missing.)
+- [x] Add PostgreSQL integration-test setup and teardown.
+  (`tests/integration/test_postgres.py` spins a throwaway Postgres in
+  Docker; runs in CI, skips where Docker is missing.)
 - [x] Add endpoint tests for ownership isolation, provider failures, model
   failures, timeouts, persistence failures, and history pagination. (Voice
   provider tests land with section 4.)
-- [ ] Confirm migrations apply cleanly from a fresh database.
-- [ ] Document API/model service boundaries, memory requirements, cold starts,
-  environment variables, and deployment steps. (`.env.example` covers the
-  variables; the rest is open.)
-- [ ] Configure production migrations, storage access, secrets, and API hosting.
-- [ ] Measure upload, provider, inference, persistence, and total request
-  latency separately.
+- [x] Confirm migrations apply cleanly from a fresh database. (The integration
+  test runs `prisma migrate deploy` against an empty schema and then
+  exercises the API's exact query shapes.)
+- [x] Document API/model service boundaries, memory requirements, cold starts,
+  environment variables, and deployment steps. (`docs/deployment.md` +
+  `backend/.env.example` cover architecture, env, and rollout steps.)
+- [ ] Configure production migrations, storage access, secrets, and API
+  hosting. (Owner: platform choice, S3 bucket/keys, Neon baseline, prod
+  secrets — see the split in the task list.)
+- [x] Measure upload, provider, inference, persistence, and total request
+  latency separately. (`ask_timings` / `upload_timings` phase logs and
+  `scripts/bench.py` for end-to-end p50/p95.)
 
 ## Verification
 
 ```bash
 cd backend
-./venv/bin/python -m pytest -q      # 150 tests, no network, no Postgres
+./venv/bin/python -m pytest -q      # 191 tests (+1 skipped without Docker /
+                                    # SARVAM_API_KEY), no network, no Postgres
 ./venv/bin/ruff check .
 ./venv/bin/ruff format --check .
 ```

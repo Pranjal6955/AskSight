@@ -29,6 +29,8 @@ class TestRouting(unittest.TestCase):
                 "/history/{entry_id}",
                 "/health/live",
                 "/health/ready",
+                "/stt",
+                "/tts",
             },
         )
 

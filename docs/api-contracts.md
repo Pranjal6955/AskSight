@@ -107,7 +107,7 @@ report with a server log line.
 | TTS text | 1–2000 characters | `POST /tts` |
 | Page size | 1–50, default 20 | `GET /history` |
 | Auth requests | 10 per minute per IP | `POST /auth/signup`, `/login`, `/refresh`, `/logout` |
-| Uploads and questions | 30 per minute per authenticated user | `POST /images`, `POST /ask` |
+| Uploads, questions, speech | 30 per minute per authenticated user | `POST /images`, `POST /ask`, `POST /stt`, `POST /tts` |
 
 Rate limits are in-memory (per process) and answer **429** with
 `"Too many requests. Please wait a moment and try again."`. GET endpoints are
@@ -310,8 +310,11 @@ The API key stays server-side. The mobile app never sees it.
 `language` is the language the audio was spoken in, preserved from the audio
 where the provider can detect it.
 
-**413** — over the size limit. **415** — unsupported audio format. **422** —
-undecodable audio. **502 / 504** — the provider failed or timed out.
+**413** — over the size limit. **415** — unsupported audio format (magic-byte
+checked: WAV, MP3, OGG, FLAC, MP4/M4A, AIFF, AMR, WebM are recognised; the
+declared Content-Type of the upload is never trusted). **422** — empty audio
+or the provider rejected it. **429** — the provider is rate-limiting us (same
+sentence as our own limits). **502 / 504** — the provider failed or timed out.
 
 **Decision:** the STT provider is called behind a service module with the same
 interface as a mock, so tests never call Sarvam and the endpoint works in
@@ -333,8 +336,8 @@ obscurely.
 
 | Field | Rules |
 |---|---|
-| `text` | 1–2000 characters |
-| `language` | optional, defaults to `en-IN` |
+| `text` | 1–2000 characters, non-blank |
+| `language` | optional, defaults to `DEFAULT_LANGUAGE` (`en-IN`) |
 | `voice` | optional, provider default when omitted |
 
 **200** — audio bytes.
@@ -343,8 +346,9 @@ obscurely.
 Content-Type: audio/mpeg
 ```
 
-**422** — empty or oversized text. **502 / 504** — provider failed or timed
-out. **503** — no API key configured.
+**422** — empty or oversized text, or the provider rejected the input.
+**429** — the provider is rate-limiting us. **502 / 504** — provider failed or
+timed out. **503** — no API key configured.
 
 Generated speech is returned as bytes, not base64 inside JSON — a base64
 payload would inflate it by a third and force the whole clip through memory.
