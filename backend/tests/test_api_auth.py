@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.api import auth as auth_module
 from app.core import dependencies
-from app.core.security import verify_password
+from app.core.security import create_refresh_token, verify_password
 from app.main import app
 from tests.fakes import FakeDB
 
@@ -47,7 +47,7 @@ class TestSignup(AuthApiTestCase):
 
     def test_stores_password_hashed_not_plaintext(self):
         self.signup()
-        stored = next(iter(self.db.user.users.values()))
+        stored = next(iter(self.db.user.records.values()))
         self.assertNotEqual(stored.password, PASSWORD)
         self.assertTrue(verify_password(PASSWORD, stored.password))
 
@@ -67,7 +67,7 @@ class TestSignup(AuthApiTestCase):
 
     def test_does_not_create_user_when_validation_fails(self):
         self.signup(password="short")
-        self.assertEqual(len(self.db.user.users), 0)
+        self.assertEqual(len(self.db.user.records), 0)
 
 
 class TestLogin(AuthApiTestCase):
@@ -142,8 +142,99 @@ class TestMe(AuthApiTestCase):
     def test_rejects_token_for_deleted_user_with_401(self):
         self.signup()
         headers = self.auth_header()
-        self.db.user.users.clear()
+        self.db.user.records.clear()
         self.assertEqual(self.client.get("/auth/me", headers=headers).status_code, 401)
+
+
+class TestRefresh(AuthApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.signup()
+
+    def tokens(self):
+        return self.client.post(
+            "/auth/login", json={"email": SIGNUP["email"], "password": PASSWORD}
+        ).json()
+
+    def refresh(self, token):
+        return self.client.post("/auth/refresh", json={"refresh_token": token})
+
+    def test_login_returns_a_refresh_token(self):
+        body = self.tokens()
+        self.assertTrue(body["refresh_token"])
+        self.assertEqual(body["token_type"], "bearer")
+
+    def test_refresh_returns_a_working_new_token_pair(self):
+        first = self.tokens()
+        res = self.refresh(first["refresh_token"])
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertNotEqual(body["refresh_token"], first["refresh_token"])
+        me = self.client.get(
+            "/auth/me", headers={"Authorization": f"Bearer {body['access_token']}"}
+        )
+        self.assertEqual(me.status_code, 200)
+
+    def test_refresh_rotates_so_the_old_token_cannot_be_replayed(self):
+        first = self.tokens()
+        self.assertEqual(self.refresh(first["refresh_token"]).status_code, 200)
+        replay = self.refresh(first["refresh_token"])
+        self.assertEqual(replay.status_code, 401)
+        self.assertEqual(replay.json()["detail"], auth_module.INVALID_SESSION)
+
+    def test_rotation_keeps_exactly_one_live_session(self):
+        first = self.tokens()
+        self.assertEqual(len(self.db.session.records), 1)
+        second = self.refresh(first["refresh_token"]).json()
+        self.assertEqual(len(self.db.session.records), 1)
+        self.refresh(second["refresh_token"])
+        self.assertEqual(len(self.db.session.records), 1)
+
+    def test_refresh_with_garbage_is_401(self):
+        self.assertEqual(self.refresh("garbage").status_code, 401)
+
+    def test_access_token_is_not_accepted_as_a_refresh_token(self):
+        self.assertEqual(self.refresh(self.tokens()["access_token"]).status_code, 401)
+
+    def test_refresh_without_a_live_session_is_401(self):
+        # A well-formed token whose session row no longer exists.
+        user = next(iter(self.db.user.records.values()))
+        orphan = create_refresh_token(user.id, "sess_gone")
+        self.assertEqual(self.refresh(orphan).status_code, 401)
+
+    def test_refresh_requires_the_field(self):
+        self.assertEqual(self.client.post("/auth/refresh", json={}).status_code, 422)
+
+
+class TestLogout(AuthApiTestCase):
+    def setUp(self):
+        super().setUp()
+        self.signup()
+        self.token = self.client.post(
+            "/auth/login", json={"email": SIGNUP["email"], "password": PASSWORD}
+        ).json()["refresh_token"]
+
+    def logout(self, token=None):
+        return self.client.post("/auth/logout", json={"refresh_token": token or self.token})
+
+    def test_logout_revokes_the_session(self):
+        res = self.logout()
+        self.assertEqual(res.status_code, 204)
+        self.assertEqual(len(self.db.session.records), 0)
+        # The revoked refresh token can no longer be exchanged.
+        res = self.client.post("/auth/refresh", json={"refresh_token": self.token})
+        self.assertEqual(res.status_code, 401)
+
+    def test_logout_is_idempotent(self):
+        self.assertEqual(self.logout().status_code, 204)
+        self.assertEqual(self.logout().status_code, 204)
+
+    def test_logout_with_garbage_is_401(self):
+        self.assertEqual(self.logout(token="garbage").status_code, 401)
+
+    def test_refresh_token_is_rejected_as_an_access_token(self):
+        res = self.client.get("/auth/me", headers={"Authorization": f"Bearer {self.token}"})
+        self.assertEqual(res.status_code, 401)
 
 
 if __name__ == "__main__":
