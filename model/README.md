@@ -31,7 +31,10 @@ CLIP-encoder + decoder-only-LM pair.
   models and never download checkpoints.
 - **Inference:** CPU works (slow; measured latency is recorded per checkpoint
   by `evaluate`), GPU strongly recommended. The service loads weights once at
-  startup.
+  startup, warms up, and reports readiness/latency/memory through `stats()`.
+  Target serving hardware is still to be confirmed; `v0.1-colab` measured
+  0.224 s median / 0.284 s p95 VQA latency on a Tesla T4 (263 held-out
+  questions), which is a development reference, not a deployment guarantee.
 
 ## Setup
 
@@ -60,6 +63,9 @@ python -m asksight_model.evaluate --checkpoint checkpoints/v0.1 --split test
 
 # 3b. Same split under capture faults (blur/dark/obstructed/low-res).
 python -m asksight_model.robustness --checkpoint checkpoints/v0.1 --split test
+
+# 3c. Verify checkpoint artifacts against manifest.json (use --strict for release).
+python -m asksight_model.verify --checkpoint checkpoints/v0.1 --strict
 
 # 4. Serve (Track A imports this):
 python -c "from asksight_model import LocalInferenceService; s = LocalInferenceService('checkpoints/v0.1')"
@@ -98,7 +104,7 @@ Success criteria:
 - `train_loss` trends down across steps and `val_loss` follows it (if `val_loss`
   climbs while `train_loss` falls, note it in the PR — overfitting signal).
 - `checkpoints/v0.1-smoke/` contains `projector.safetensors`, `config.yaml`,
-  `metrics.json`, `data_meta.json`.
+  `manifest.json`, `metrics.json`, `data_meta.json`.
 - Roughly 5–15 minutes of CPU time at `--limit 100`, backbone download excluded.
 
 Verified on a CPU-only machine (11 Nov 2026): 421 s total (214.5 s + 206.5 s),
@@ -168,29 +174,52 @@ validates each epoch, and writes:
 checkpoints/<version>/
 ├── projector.safetensors   # the only trained weights
 ├── config.yaml             # backbone names + pinned revisions + prompt settings
+├── manifest.json           # sha256 + size of projector/config/data_meta
 ├── metrics.json            # per-epoch losses, device, GPU model, configs
 ├── data_meta.json          # exact split provenance
 └── predictions_<split>.jsonl  # written by evaluate
 ```
 
 Reproducibility: fixed seed (`train.seed`), pinned backbone revisions, greedy
-decoding, and the split fingerprints in `data_meta.json`. The connector is
-trained in float32 even when the LM runs in bf16.
+decoding, and the split fingerprints in `data_meta.json`. `metrics.json` also
+records the git revision and dirty flag, Python/dependency versions, UTC
+start/finish timestamps, hardware, and the copied dataset metadata. The
+connector is trained in float32 even when the LM runs in bf16. `manifest.json`
+hashes the immutable artifacts (`projector.safetensors`, `config.yaml`, and
+`data_meta.json` when present); `metrics.json` is excluded because evaluation
+appends to it.
+
+Retrieve checkpoints from the approved artifact store rather than source
+control (`checkpoints/` and `data/` are gitignored), then verify before serving:
+
+```bash
+sha256sum checkpoints/v0.1-colab/projector.safetensors   # against manifest.json
+python -m asksight_model.verify --checkpoint checkpoints/v0.1-colab --strict
+```
+
+Checkpoints created before manifests existed can be migrated once on a trusted
+local copy with `--write`, then verified strictly. `--write` records the current
+bytes, so run it only before distribution, not after a download.
+
+Release gate: follow [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) before
+selecting a checkpoint for production.
 
 ## Evaluation (B6)
 
 `python -m asksight_model.evaluate` reports the standard VQA accuracy (the
 official answer normalization from the VQA v2 evaluation code is ported in
-`evaluate.py`), median/p95 inference latency, and writes predictions. Results
-are recorded in `metrics.json` per checkpoint version. Latency is
-hardware-dependent — record it on the target deployment hardware.
+`evaluate.py`), median/p95 inference latency, service cold-start time, process
+memory, and writes predictions. Results are recorded in `metrics.json` per
+checkpoint version. Latency is hardware-dependent — record it on the target
+deployment hardware, not a development box or Colab runtime.
 
 `python -m asksight_model.robustness` re-runs the same held-out split under one
 realistic capture fault per condition — `clean`, `blur`, `dark`, `obstructed`,
 `lowres` — and records per-condition accuracy and the drop against `clean` in
 `metrics.json` under `eval_robustness`. That drop is the measured basis for the
 "please verify this" guidance shown to a user; with the smoke checkpoint the
-numbers are noise, so only trust them from a full GPU run.
+numbers are noise, and the 263-question `v0.1-colab` run is indicative but small
+— set thresholds only from the release checkpoint run.
 
 ## Prompt
 
@@ -212,26 +241,87 @@ checkpoint to confirm the ordering holds.
 
 ## Inference service (B5)
 
-All services satisfy `{model_version: str, answer(image: PIL.Image, question: str) -> str}`:
+All services satisfy the versioned in-process protocol
+`{protocol_version, model_version: str, answer(image: PIL.Image, question: str) -> str}`:
 
 - `MockInferenceService` — deterministic placeholder so Track A can build the
   full flow before training completes. Clearly marked, not a real model.
-- `LocalInferenceService` — loads a checkpoint once at construction (never per
-  request), runs greedy generation, serializes generation behind a lock, and
-  validates inputs (non-empty question, ≤500 chars, readable image).
-- Empty/degenerate model output returns `CLARIFY_ANSWER` ("ask again") rather
-  than asserting a guess. There is deliberately **no calibrated confidence
-  score** until an evaluated method exists (Track A6).
+- `LocalInferenceService` — validates the checkpoint, loads the model once at
+  construction (never per request), warms up with one tiny generation, and is
+  ready only after that succeeds. Construction fails with a clear
+  `FileNotFoundError`/`ValueError` for missing artifacts, manifest hash
+  mismatches, unpinned remote backbones, out-of-range generation limits, or a
+  projector/config shape mismatch — before any traffic is served.
+
+Request behavior:
+
+- Inputs are validated first (non-empty question, ≤500 chars, readable image).
+- Generation is greedy and bounded by `model.max_new_tokens` (validated to
+  1–128); the service exposes no per-request token override.
+- `max_concurrency` defaults to 1, preserving serialized generation on one
+  GPU. Raise it only after measuring memory and throughput.
+- `queue_timeout_s` (default 30 s) bounds the wait for a slot and raises
+  `TimeoutError` without running the request. Generation already in progress is
+  not interruptible mid-call; its work is bounded by the token limit. Empty or
+  degenerate output returns `CLARIFY_ANSWER` ("ask again") rather than asserting
+  a guess.
+- Invalid input raises `ValueError`; inference failures propagate. Track A maps
+  these to API errors. There is deliberately **no calibrated confidence score**
+  until an evaluated method exists (Track A6).
+- `stats()` returns request/failure/timeout counts, queue/generation/latency
+  median and p95 over the last 1024 generation requests, cold-start seconds,
+  RSS memory, model version, and readiness. Use it for health/readiness
+  reporting and capacity measurements.
+
+```python
+service = LocalInferenceService(
+    "checkpoints/v0.1-colab", device="auto", max_concurrency=1, queue_timeout_s=30
+)
+assert service.ready
+print(service.stats())
+```
+
+### Serving boundary and deployment notes
+
+The current boundary is in-process: the backend imports `LocalInferenceService`
+when `ASKSIGHT_MODEL_CHECKPOINT` is set (see `backend/app/core/inference.py`).
+That keeps the prototype simple but puts torch and model memory in the backend
+process. A dedicated inference service or external host is still an open
+product/deployment decision; the versioned protocol and `stats()` are designed
+to move behind HTTP without changing Track A's contract.
+
+Checklist for a serving host:
+
+1. Install the CUDA build of PyTorch that matches the driver, then
+   `pip install -e .` in a separate environment from the lightweight backend
+   where possible.
+2. Mount/copy the checkpoint outside source control and set
+   `ASKSIGHT_MODEL_CHECKPOINT` to that directory. Backbones are cached under
+   `HF_HOME`; set it to a persistent volume so cold starts do not re-download
+   ~4 GB.
+3. Verify with `python -m asksight_model.verify --checkpoint ... --strict`.
+4. Start the backend/service and require `service.ready` before accepting
+   traffic; log `service.stats()` at startup and periodically.
+5. Smoke-test one `/ask` request and record cold start plus memory from the
+   stats output.
 
 ## Ambiguity, quality, and operational notes
 
 - The model is trained on a VQA subset and answers in English with a short
-  phrase (good for TTS). Answers can be plausibly wrong — blurry, dark, or
-  obscured images should be flagged to the user as "verify this"; the
-  `robustness` module measures how much each fault costs in accuracy.
+  phrase (good for TTS). Answers can be plausibly wrong. On the 263-question
+  `v0.1-colab` test split, robustness drops were 0.5–1.1 accuracy points for
+  blur/dark/obstructed/low-res; the sample is small, so treat that as
+  indicative and re-measure the final checkpoint.
+- Answer-verification policy: return the clarification answer when the model
+  output is empty; otherwise do not fabricate confidence. Tell users that
+  answers from blurry, dark, obstructed, or very low-resolution captures may be
+  wrong and should be verified, because no calibrated image- or answer-quality
+  score has been evaluated yet. Revisit this policy with the final checkpoint's
+  robustness numbers and the agreed product threshold.
 - Language: VQA v2 is English-only, and so is the model's output. Multilingual
   support belongs to the Sarvam STT/TTS layer (Track A), which can translate
-  around the English VQA core.
+  around the English VQA core. Arbitrarily long or malformed questions are
+  rejected by input validation; multilingual questions are accepted as text.
 - Ambiguous questions yield a short guess, not a clarification, unless the
   output is empty. A clarification heuristic beyond the empty-output guard
   needs evaluation first.
@@ -255,4 +345,10 @@ All services satisfy `{model_version: str, answer(image: PIL.Image, question: st
 cd model
 .venv/bin/pytest -q          # tiny local fixtures: no network, no checkpoints
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
+python -m asksight_model.verify --help
 ```
+
+CI runs the same lint/format/test commands from `.github/workflows/ci.yml`;
+tests use tiny local backbones and never download the production checkpoints.
+Invalid checkpoints, manifest tampering, config/weight mismatches, generation
+limits, queue timeouts, and degraded-image evaluation are covered.

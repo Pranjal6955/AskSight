@@ -98,6 +98,8 @@ def run(
         "split": split,
         "n": len(records),
         "model_version": service.model_version,
+        "startup_seconds": service.stats()["startup_seconds"],
+        "process_rss_mb": service.stats()["process_rss_mb"],
         "conditions": results,
     }
     metrics_path = Path(checkpoint_dir) / "metrics.json"

@@ -22,6 +22,10 @@ DEFAULT_SYSTEM_PROMPT = (
     "short phrase. Do not write a sentence."
 )
 
+# Hard cap for generated tokens so a malformed config cannot make one request
+# run unbounded (the service exposes no per-request token override).
+MAX_NEW_TOKENS_LIMIT = 128
+
 
 @dataclass
 class ModelConfig:
@@ -82,3 +86,31 @@ def load_configs(path: Path) -> tuple[ModelConfig, TrainConfig]:
         ModelConfig.from_dict(data.get("model") or {}),
         TrainConfig.from_dict(data.get("train") or {}),
     )
+
+
+def validate_model_config(config: ModelConfig) -> None:
+    """Reject settings that would make a checkpoint unservable or unreproducible.
+
+    Remote backbones must be pinned by revision. Local paths are allowed
+    unpinned because they are fixtures or already-fetched snapshots.
+    """
+    if not config.version.strip():
+        raise ValueError("model config must set a non-empty version")
+    if not config.system_prompt.strip():
+        raise ValueError("model config must set a non-empty system_prompt")
+    if not 1 <= config.max_new_tokens <= MAX_NEW_TOKENS_LIMIT:
+        raise ValueError(
+            f"max_new_tokens must be between 1 and {MAX_NEW_TOKENS_LIMIT},"
+            f" got {config.max_new_tokens}"
+        )
+    if config.connector_hidden is not None and config.connector_hidden <= 0:
+        raise ValueError("connector_hidden must be positive when set")
+    for label, name, revision in (
+        ("vision", config.vision_model, config.vision_revision),
+        ("lm", config.lm_model, config.lm_revision),
+    ):
+        if revision is None and not Path(name).exists():
+            raise ValueError(
+                f"{label} model {name!r} has no pinned revision; set"
+                f" {label}_revision so the checkpoint stays reproducible"
+            )
