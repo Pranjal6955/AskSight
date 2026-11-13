@@ -14,7 +14,25 @@ class TestRouting(unittest.TestCase):
 
     def test_registers_all_endpoints(self):
         paths = self.client.get("/openapi.json").json()["paths"]
-        self.assertEqual(set(paths), {"/auth/signup", "/auth/login", "/auth/me", "/ask"})
+        self.assertEqual(
+            set(paths),
+            {
+                "/auth/signup",
+                "/auth/login",
+                "/auth/refresh",
+                "/auth/logout",
+                "/auth/me",
+                "/images",
+                "/images/{image_id}",
+                "/ask",
+                "/history",
+                "/history/{entry_id}",
+                "/health/live",
+                "/health/ready",
+                "/stt",
+                "/tts",
+            },
+        )
 
     def test_signup_is_post_and_me_is_get(self):
         paths = self.client.get("/openapi.json").json()["paths"]

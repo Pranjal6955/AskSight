@@ -1,8 +1,16 @@
 """Pipeline tests: frozen backbones, prompt assembly, generation, checkpoints (B2/B7)."""
 
+import json
+
+import pytest
 import torch
 
-from asksight_model.pipeline import AskSightModel, load_projector, save_checkpoint
+from asksight_model.pipeline import (
+    AskSightModel,
+    load_projector,
+    save_checkpoint,
+    verify_checkpoint,
+)
 
 
 def test_backbones_frozen_connector_trainable(tiny_model):
@@ -55,6 +63,11 @@ def test_generate_deterministic_strings(tiny_model, tiny_images, tiny_questions)
     assert all(isinstance(text, str) for text in first)
 
 
+def test_generate_respects_max_new_tokens(tiny_model, tiny_images, tiny_questions):
+    outputs = tiny_model.generate(tiny_images, tiny_questions, max_new_tokens=1)
+    assert all(len(output.split()) <= 1 for output in outputs)
+
+
 def test_checkpoint_roundtrip(tiny_config, tiny_images, tiny_questions, tmp_path):
     model = AskSightModel(tiny_config, device="cpu", dtype="float32")
     with torch.no_grad():
@@ -71,3 +84,44 @@ def test_checkpoint_roundtrip(tiny_config, tiny_images, tiny_questions, tmp_path
         model.connector.named_parameters(), restored.connector.named_parameters(), strict=True
     ):
         assert torch.allclose(p1, p2), name
+
+
+def test_manifest_verifies_and_detects_tampering(tiny_config, tmp_path):
+    save_checkpoint(tmp_path, AskSightModel(tiny_config, device="cpu", dtype="float32"))
+
+    manifest = verify_checkpoint(tmp_path)
+    assert set(manifest["files"]) >= {"projector.safetensors", "config.yaml"}
+
+    (tmp_path / "config.yaml").write_text((tmp_path / "config.yaml").read_text() + "\n")
+    with pytest.raises(ValueError, match="manifest hash"):
+        verify_checkpoint(tmp_path)
+
+
+def test_strict_verification_requires_manifest(tiny_config, tmp_path):
+    save_checkpoint(tmp_path, AskSightModel(tiny_config, device="cpu", dtype="float32"))
+    (tmp_path / "manifest.json").unlink()
+
+    assert verify_checkpoint(tmp_path)["files"] == {}
+    with pytest.raises(FileNotFoundError, match="manifest"):
+        verify_checkpoint(tmp_path, require_manifest=True)
+
+
+def test_manifest_rejects_paths_outside_checkpoint(tiny_config, tmp_path):
+    save_checkpoint(tmp_path, AskSightModel(tiny_config, device="cpu", dtype="float32"))
+    manifest_path = tmp_path / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["files"]["../outside.safetensors"] = {"sha256": "0"}
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match="unsafe file name"):
+        verify_checkpoint(tmp_path)
+
+
+def test_verify_cli_migrates_an_old_checkpoint(tiny_config, tmp_path):
+    from asksight_model.verify import main
+
+    save_checkpoint(tmp_path, AskSightModel(tiny_config, device="cpu", dtype="float32"))
+    (tmp_path / "manifest.json").unlink()
+
+    assert main(["--checkpoint", str(tmp_path), "--write"]) == 0
+    assert main(["--checkpoint", str(tmp_path), "--strict"]) == 0

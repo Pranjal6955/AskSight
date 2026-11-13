@@ -248,6 +248,7 @@ def evaluate(
             print(f"evaluated {len(predictions)}/{len(records)}")
 
     latencies_sorted = sorted(latencies)
+    stats = service.stats()
     result = {
         "split": split,
         "n": len(predictions),
@@ -256,6 +257,8 @@ def evaluate(
         "latency_p95_s": round(latencies_sorted[int(0.95 * (len(latencies_sorted) - 1))], 3),
         "device": service.model.device.type,
         "model_version": service.model_version,
+        "startup_seconds": stats["startup_seconds"],
+        "process_rss_mb": stats["process_rss_mb"],
     }
 
     predictions_path = Path(checkpoint_dir) / f"predictions_{split}.jsonl"

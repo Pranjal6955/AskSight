@@ -1,7 +1,7 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Looking for ways to speed up your queries, or to scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
@@ -22,4 +22,56 @@ model User {
   password String
   createdAt DateTime @default(now())
 
+  images  Image[]
+  history HistoryEntry[]
+  sessions Session[]
+}
+
+// A refresh-token session. Refreshing rotates it: the old row is deleted and a
+// new one inserted, so a token whose row is gone has already been used.
+// Expiry lives in the JWT's own `exp` claim; this row is only revocation state.
+model Session {
+  id String @id @default(cuid())
+  userId String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// A photo the user captured. The bytes live in storage under an opaque key;
+// this row holds only metadata and ownership.
+model Image {
+  id String @id @default(cuid())
+  ownerId String
+  // Opaque, never derived from a user-supplied filename.
+  storageKey String @unique
+  mimeType String
+  sizeBytes Int
+  width Int
+  height Int
+  createdAt DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  history HistoryEntry[]
+
+  @@index([ownerId])
+}
+
+// One question asked about one image, and the answer that was given.
+model HistoryEntry {
+  id String @id @default(cuid())
+  ownerId String
+  imageId String
+  question String
+  answer String
+  // The checkpoint that produced the answer, so it can always be traced.
+  modelVersion String
+  createdAt DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  image Image @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, createdAt])
 }

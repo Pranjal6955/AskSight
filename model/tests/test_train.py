@@ -51,9 +51,18 @@ def test_train_then_evaluate_smoke(tiny_paths, tiny_records, tmp_path):
     checkpoint = out_dir / "smoke-v1"
     assert (checkpoint / "projector.safetensors").exists()
     assert (checkpoint / "config.yaml").exists()
+    assert (checkpoint / "manifest.json").exists()
+    assert (checkpoint / "data_meta.json").exists()
     metrics = json.loads((checkpoint / "metrics.json").read_text())
     assert metrics["epochs"][0]["val_loss"] > 0
     assert metrics["version"] == "smoke-v1"
+    assert metrics["started_at"] and metrics["finished_at"]
+    assert metrics["code"].keys() == {"revision", "dirty"}
+    assert metrics["dependencies"]["python"]
+    assert "torch" in metrics["dependencies"]
+    assert metrics["data_meta"]["seed"] == 0
+    manifest = json.loads((checkpoint / "manifest.json").read_text())
+    assert "data_meta.json" in manifest["files"]
 
     assert (
         evaluate_module.main(

@@ -1,22 +1,48 @@
+"""FastAPI application factory for the AskSight backend."""
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from dotenv import load_dotenv
 
-from app.api.ask import router as ask_router
-from app.api.auth import router as auth_router
-from app.db import db
+load_dotenv()
+
+from fastapi import FastAPI  # noqa: E402
+
+from app.api import ask, auth, health, history, images, speech  # noqa: E402
+from app.core.middleware import RequestContextMiddleware, setup_logging  # noqa: E402
+from app.db import db  # noqa: E402
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup : Connect to DB
+async def lifespan(_: FastAPI):
     await db.connect()
     yield
-    # Shutdown : Disconnected from DB
     await db.disconnect()
 
 
-app = FastAPI(lifespan=lifespan)
+def create_app() -> FastAPI:
+    setup_logging()
+    application = FastAPI(
+        title="AskSight API",
+        description=(
+            "Backend for AskSight: image upload, vision-question answering, and history. "
+            "All endpoints except /auth/signup, /auth/login and /health/* require a "
+            "Bearer access token."
+        ),
+        version="0.1.0",
+        lifespan=lifespan,
+    )
 
-app.include_router(auth_router)
-app.include_router(ask_router)
+    # Outside the router dependencies, so even 401/404 responses carry the id.
+    application.add_middleware(RequestContextMiddleware)
+
+    application.include_router(health.router)
+    application.include_router(auth.router)
+    application.include_router(images.router)
+    application.include_router(ask.router)
+    application.include_router(history.router)
+    application.include_router(speech.router)
+    return application
+
+
+app = create_app()
