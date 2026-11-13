@@ -136,12 +136,14 @@ async def exercise_api_queries() -> None:
             )
 
         # The exact shapes GET /history uses: keyset order and cursor filter.
+        # take=1 so the cursor falls *between* the two rows — the page holds
+        # the newest, and the next page must come back with exactly the older.
         page = await db.historyentry.find_many(
             where={"ownerId": user.id},
             order=[{"createdAt": "desc"}, {"id": "desc"}],
-            take=3,
+            take=1,
         )
-        assert [entry.question for entry in page] == ["q2", "q1"]
+        assert [entry.question for entry in page] == ["q2"]
         cursor = page[-1]
         older = await db.historyentry.find_many(
             where={
