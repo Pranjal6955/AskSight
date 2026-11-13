@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFil
 
 from app.core import images as image_checks
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import per_user
 from app.core.storage import get_storage
 from app.db import db
 from app.schema.images import ImageResponse
@@ -23,7 +24,12 @@ async def owned_image(image_id: str, owner_id: str):
     return record
 
 
-@router.post("", response_model=ImageResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ImageResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(per_user)],
+)
 async def upload_image(
     current_user=Depends(get_current_user),
     file: UploadFile = File(...),

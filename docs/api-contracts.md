@@ -106,6 +106,12 @@ report with a server log line.
 | Audio upload | 15 MB | `POST /stt` |
 | TTS text | 1–2000 characters | `POST /tts` |
 | Page size | 1–50, default 20 | `GET /history` |
+| Auth requests | 10 per minute per IP | `POST /auth/signup`, `/login`, `/refresh`, `/logout` |
+| Uploads and questions | 30 per minute per authenticated user | `POST /images`, `POST /ask` |
+
+Rate limits are in-memory (per process) and answer **429** with
+`"Too many requests. Please wait a moment and try again."`. GET endpoints are
+never rate-limited.
 
 ### Model versioning
 

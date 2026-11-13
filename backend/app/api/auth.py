@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from jwt.exceptions import InvalidTokenError
 
 from app.core.dependencies import get_current_user
+from app.core.rate_limit import per_ip
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -28,6 +29,7 @@ INVALID_SESSION = "Invalid or expired session. Please sign in again."
     "/signup",
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(per_ip)],
 )
 async def signup(payload: SignupRequest):
     email = str(payload.email).strip().lower()
@@ -52,7 +54,7 @@ async def signup(payload: SignupRequest):
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse, dependencies=[Depends(per_ip)])
 async def login(payload: LoginRequest):
     email = str(payload.email).strip().lower()
     user = await db.user.find_unique(where={"email": email})
@@ -68,7 +70,7 @@ async def login(payload: LoginRequest):
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh", response_model=TokenResponse, dependencies=[Depends(per_ip)])
 async def refresh(payload: RefreshRequest):
     try:
         user_id, session_id = decode_refresh_token(payload.refresh_token)
@@ -89,7 +91,7 @@ async def refresh(payload: RefreshRequest):
     )
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(per_ip)])
 async def logout(payload: LogoutRequest):
     try:
         user_id, session_id = decode_refresh_token(payload.refresh_token)

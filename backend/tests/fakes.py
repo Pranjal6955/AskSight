@@ -152,10 +152,15 @@ class FakeDB:
 
 
 def patch_db(test_case, fake=None):
-    """Point every module that imported `db` at one FakeDB and return it."""
-    from app.api import ask, auth, health, history, images
-    from app.core import dependencies
+    """Point every module that imported `db` at one FakeDB and return it.
 
+    Also resets rate-limit counters: they are module-level state that would
+    otherwise leak between tests.
+    """
+    from app.api import ask, auth, health, history, images
+    from app.core import dependencies, rate_limit
+
+    rate_limit.reset_all()
     fake = fake or FakeDB()
     for module in (ask, auth, health, history, images, dependencies):
         patcher = patch.object(module, "db", fake)

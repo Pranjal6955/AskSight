@@ -1,13 +1,11 @@
 import unittest
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.api import auth as auth_module
-from app.core import dependencies
 from app.core.security import create_refresh_token, verify_password
 from app.main import app
-from tests.fakes import FakeDB
+from tests.fakes import patch_db
 
 SIGNUP = {"name": "Ada Lovelace", "email": "Ada@Example.com", "password": "password123"}
 PASSWORD = "password123"
@@ -15,11 +13,7 @@ PASSWORD = "password123"
 
 class AuthApiTestCase(unittest.TestCase):
     def setUp(self):
-        self.db = FakeDB()
-        for module in (auth_module, dependencies):
-            patcher = patch.object(module, "db", self.db)
-            patcher.start()
-            self.addCleanup(patcher.stop)
+        self.db = patch_db(self)
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
 

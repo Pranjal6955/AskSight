@@ -10,6 +10,7 @@ from app.core import images as image_checks
 from app.core.dependencies import get_current_user
 from app.core.inference import get_inference_service
 from app.core.middleware import get_request_id
+from app.core.rate_limit import per_user
 from app.core.storage import get_storage
 from app.db import db
 from app.schema.ask import AskRequest, AskResponse
@@ -25,7 +26,12 @@ ASK_TOO_SLOW = "The model took too long to answer. Please try again."
 NOT_SAVED = "The answer could not be saved to history."
 
 
-@router.post("", response_model=AskResponse, status_code=status.HTTP_200_OK)
+@router.post(
+    "",
+    response_model=AskResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(per_user)],
+)
 async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
     """Answer a question about an image and append the exchange to history."""
     record = await owned_image(payload.image_id, current_user.id)
