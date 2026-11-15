@@ -1,6 +1,7 @@
 # AskSight — Mobile UI Design
 
-**Status:** design specification, not yet implemented.
+**Status:** product and UX specification. Implemented screens and remaining work
+are tracked in [plan.md](plan.md).
 **Audience of the product:** blind and low-vision people. Every choice below is
 made for someone who may not see the screen at all, may see only very large
 shapes, or may see the screen with magnification and high contrast.
@@ -184,26 +185,131 @@ answers wrap; no truncation of an answer anywhere it is the point of the screen
 
 ---
 
-## 6. Navigation map
+## 6. End-to-end app flow
 
-```
-Signed out ──► /login ──► /signup
-                   │
-                   ▼
-        Tabs: Home · History · Settings
-                   │
-Home ──► Camera (modal) ──► Photo preview ──► Ask ──► Thinking ──► Answer
-  │                                │                                 │
-  │                                └── Retake ◄──────────────────────┘
-  │                                                                  │
-  └── Photo library picker ──────────────────────────────────────────┘
-                                                                     │
-History ──► Entry detail ──► (delete)                                │
-Settings ──► Text size · Spoken answers · Language · Privacy · About ┘
+This is the complete user journey, including first-run consent, both photo
+sources, voice and typed questions, saved history, and the recovery paths users
+can take when a permission or request fails. Route names in parentheses match
+`ui/src/app/`.
+
+The image below is a visual storyboard for the journey. The route and recovery
+diagrams that follow define the detailed behavior.
+
+![AskSight complete app flow storyboard](ui/assets/design/asksight-app-flow.png)
+
+```mermaid
+flowchart TD
+    Start([Open AskSight]) --> Restore{Refresh session valid?}
+    Restore -->|No session or expired| Login[Sign in / Sign up]
+    Login -->|Successful sign in| ConsentCheck
+    Restore -->|Yes| ConsentCheck{Consent already accepted?}
+    ConsentCheck -->|No| Consent[Consent: Before you start]
+    Consent -->|Read More| Consent
+    Consent -->|I Understand: save consent| Home
+    ConsentCheck -->|Yes| Home[Home]
+
+    Home -->|Take a Photo| CameraPermission{Camera permission?}
+    CameraPermission -->|Explain, then allow| Camera[Camera]
+    CameraPermission -->|Denied| Library
+    Camera -->|Capture| Preview[Photo preview]
+    Camera -->|Close| Home
+    Home -->|Choose from Library| LibraryPermission{Library permission?}
+    LibraryPermission -->|Allow| Library[Choose photo]
+    LibraryPermission -->|Denied| LibraryHelp[Explain how to enable access]
+    LibraryHelp -->|Open device settings| LibraryPermission
+    LibraryHelp -->|Back| Home
+    Library -->|Choose photo| Preview
+    Library -->|Cancel| Home
+    Preview -->|Retake| Camera
+    Preview -->|Choose another| Library
+    Preview -->|Use Photo: upload succeeds| Ask[Ask about this photo]
+    Preview -->|Upload fails| UploadRecovery[Show error and retry or choose another]
+    UploadRecovery -->|Retry| Preview
+    UploadRecovery -->|Choose another| Library
+
+    Ask -->|Type question| Submit[Submit question]
+    Ask -->|Record question| MicPermission{Microphone permission?}
+    MicPermission -->|Allow| Recording[Record; tap to stop]
+    MicPermission -->|Denied| TypedFallback[Keep typed question available]
+    Recording -->|Stop| Transcribe[Transcribe speech]
+    Transcribe -->|Success| Review[Review and edit transcript]
+    Transcribe -->|Failure| TranscriptionRecovery[Show error; retry speech or type instead]
+    TranscriptionRecovery -->|Try voice again| Ask
+    TranscriptionRecovery -->|Type instead| TypedFallback
+    TypedFallback -->|Enter question| Submit
+    Review -->|Edit| Review
+    Review -->|Speak again| Ask
+    Review -->|Ask this question| Submit
+    Submit -->|Success| Answer[Read answer; optionally hear it]
+    Submit -->|Failure| AskRecovery[Show backend detail; retry or cancel]
+    AskRecovery -->|Retry| Submit
+    AskRecovery -->|Cancel| Ask
+    Answer -->|Listen again| Speech[Request and play spoken answer]
+    Speech -->|Speech failure| Answer
+    Answer -->|Ask another question| Ask
+    Answer -->|New Photo| Home
+
+    Home -->|History tab| History[History list]
+    History -->|Refresh or load more| History
+    History -->|Open question| Detail[History detail]
+    Detail -->|Play answer| Speech
+    Detail -->|Ask about available photo again| Ask
+    Detail -->|Delete question| DeleteOne{Confirm deletion?}
+    DeleteOne -->|Keep it| Detail
+    DeleteOne -->|Delete| History
+    History -->|No saved questions| EmptyHistory[Empty state: ask your first question]
+    EmptyHistory -->|Ask your first question| Home
+    History -->|Offline with cached page| CachedHistory[Show cached page and offline notice]
+    CachedHistory -->|Refresh when online| History
+
+    Home -->|Settings tab| Settings[Settings]
+    Settings -->|Reading, listening, language| Settings
+    Settings -->|Delete all history| DeleteAll{Confirm deletion?}
+    DeleteAll -->|Keep history| Settings
+    DeleteAll -->|Delete| Settings
+    Settings -->|Help and support| Support[Open support page]
+    Settings -->|Sign out| SignOut{Confirm sign out?}
+    SignOut -->|Stay signed in| Settings
+    SignOut -->|Sign out| Login
 ```
 
-Back always cancels the current step without deleting the photo until the user
-leaves the answer screen or explicitly starts over.
+### 6.1 Route and data handoff
+
+| Step | Route | Data carried forward |
+|---|---|---|
+| Consent | `/consent` | Accepted state persists in secure settings storage |
+| Home to camera/library | `/capture`, `/photo-preview` | Local photo URI stays in navigation or pending-photo memory |
+| Photo upload to question | `/ask` | `image_id` plus local photo URI |
+| Voice review | `/transcript` | Transcribed question plus `image_id` and photo URI |
+| Submitted question | `/answer` | Answer text, history entry id, model version, question, and image id |
+| History list/detail | `/(tabs)/history`, `/history/[id]` | Cursor page and entry id; last page cached in memory only |
+| Settings | `/(tabs)/settings` | Persistent accessibility, speech, language, consent, and last-model preferences |
+
+The app keeps the current photo available while moving through Ask, Transcript,
+and Answer. A failed request leaves the user on a screen with a clear retry or
+back path. Session expiry returns the user to sign-in; the app retries an
+authorized request once after refreshing the session. Backend `detail` copy is
+shown as provided.
+
+### 6.2 Screen state and recovery map
+
+| Screen or action | States the user can encounter | Recovery path |
+|---|---|---|
+| Sign in | Restoring session, signed out, invalid credentials, offline | Retry sign-in; a valid restored session goes to Home or Consent |
+| Consent | Short summary, expanded details | Accept to continue; protected routes prevent skipping it |
+| Camera/library | Permission explanation, permission denied, chooser canceled | Open system settings, use the other photo source, or return Home |
+| Photo preview/upload | Selected, uploading, offline/server error, unsupported/oversized | Retry retryable failures; choose another photo for permanent input failures |
+| Ask/recording | Idle, recording, transcribing, typed fallback | Stop or cancel recording; type if microphone/STT is unavailable |
+| Transcript/submit | Editable transcript, submitting, API error | Speak again, edit, retry submission, or cancel to Ask |
+| Answer/TTS | Text answer, optional speech, clarification, TTS failure | Text always remains available; replay or ask another question |
+| History | Loading, populated, empty, offline cache, request error | Refresh, load another cursor page, retry, or start a new question |
+| History detail/delete | Loading entry/photo, unavailable photo, delete confirmation/error | Retry an available photo; if deleted, show the backend sentence; failed delete leaves the entry |
+| Settings/delete all | Persistent choices, delete confirmation, delete error | Cancel safely or retry; clear cached history only after server success |
+
+Back cancels the current step without deleting the selected photo or saved
+history. History deletion is permanent only after the user confirms and the
+server reports success. Deleting the last history entry for an image also
+deletes that image.
 
 ---
 
