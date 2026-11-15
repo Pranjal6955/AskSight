@@ -213,7 +213,7 @@ describe("Settings screen", () => {
       await renderTabs();
       await fireEvent.press(screen.getByText("Settings"));
       expect(
-        await screen.findByText("Manage your AskSight account."),
+        await screen.findByText("Manage how AskSight reads and speaks."),
       ).toBeOnTheScreen();
     });
 
@@ -239,9 +239,11 @@ describe("Settings screen", () => {
       mockSignedIn();
       await renderTabs({ signedIn: true });
       await fireEvent.press(screen.getByText("Settings"));
-      await waitFor(() =>
-        expect(screen.getByText("John Smith")).toBeOnTheScreen(),
-      );
+      expect(
+        await screen.findByLabelText(
+          "Signed in as John Smith, john@example.com",
+        ),
+      ).toBeOnTheScreen();
       expect(screen.getByText("john@example.com")).toBeOnTheScreen();
     });
 
@@ -249,7 +251,11 @@ describe("Settings screen", () => {
       mockSignedIn();
       await renderTabs({ signedIn: true });
       await fireEvent.press(screen.getByText("Settings"));
-      await waitFor(() => expect(screen.getByText("JS")).toBeOnTheScreen());
+      expect(
+        await screen.findByLabelText(
+          "Signed in as John Smith, john@example.com",
+        ),
+      ).toBeOnTheScreen();
     });
 
     test("enables the Sign out button when signed in", async () => {
@@ -264,10 +270,13 @@ describe("Settings screen", () => {
       mockSignedIn();
       const router = await renderTabs({ signedIn: true });
       await fireEvent.press(screen.getByText("Settings"));
-      await waitFor(() =>
-        expect(screen.getByText("John Smith")).toBeOnTheScreen(),
-      );
+      expect(
+        await screen.findByLabelText(
+          "Signed in as John Smith, john@example.com",
+        ),
+      ).toBeOnTheScreen();
       await fireEvent.press(screen.getByLabelText("Sign out of your account"));
+      await fireEvent.press(await screen.findByText("Sign Out"));
       await waitFor(() => expect(router.getPathname()).toBe("/login"));
     });
   });

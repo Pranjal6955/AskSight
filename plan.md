@@ -4,8 +4,8 @@
 **Scope:** the Expo mobile app in `ui/`, from today's auth-only shell to the full
 low-vision journey.
 **Status:** Phase 0 foundations, Phase 1 capture/upload, Phase 2 ask flow, and
-Phases 3 and 4 are implemented. Device accessibility verification remains open;
-Phases 5 and 6 are planned.
+Phases 3, 4, and 5 are implemented. Phase 6 coding checks are implemented;
+device accessibility verification and release work remain open for the owner.
 
 The order below is deliberate: foundations first so every later screen is born
 accessible, then capture → ask → answer (the demo path), then history and
@@ -17,12 +17,12 @@ settings, then device verification and release.
 
 | Built and working | Missing |
 |---|---|
-| Sign-in / sign-up, refresh-token restore, session expiry handling, protected routes | First-run consent |
-| Home, camera, library picker, photo preview and upload | Voice capture, STT, TTS, ask submission, history screens |
-| API client for auth, images, ask, speech and history; accessibility toolkit and settings store | Playback, history UI and full accessibility settings |
-| Design tokens and shared accessible components | About/release configuration |
-| 192 passing UI tests; lint and typecheck clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
-| — | Core-journey end-to-end test and device accessibility pass |
+| Sign-in / sign-up, refresh-token restore, session expiry handling, consent-protected routes | Device verification |
+| Home, camera, library picker, photo preview/upload, voice ask, answer playback, history and detail | — |
+| API client, accessibility toolkit, persistent settings and history cache | Production release configuration |
+| Design tokens, shared components, About metadata, and consent screen | Store builds and submission |
+| 200 passing UI tests; lint, typecheck, and formatting clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
+| Core-journey integration test, phase tests, lint, typecheck, and formatting | TalkBack/VoiceOver, screen curtain, and physical-device checks |
 
 Ground rules for every task:
 
@@ -136,7 +136,7 @@ Story-style render in the existing test setup (no Storybook dependency).
 
 - [x] Shared test helpers for a signed-in `AuthProvider`, a fake API, and
   accessibility queries (`getByRole`, `getByLabelText`).
-- [x] Confirm all 192 UI tests pass; lint and typecheck are clean.
+- [x] Confirm all 200 UI tests pass; lint and typecheck are clean.
 
 ---
 
@@ -226,7 +226,7 @@ playback are disabled.
 **Done:** recorded questions become editable text, can be confirmed and sent;
 typed questions work if voice is unavailable; tests cover record → transcribe →
 confirm, transcription failure with typed fallback, and Ask failure with retry.
-Automated checks: 192 UI tests pass; lint and typecheck pass. Physical
+Automated checks: 200 UI tests pass; lint and typecheck pass. Physical
 TalkBack/VoiceOver verification remains part of Phase 6.
 
 ---
@@ -327,20 +327,22 @@ when signed in without consent, otherwise it chooses Home.
 
 ## 7. Phase 5 — Settings and About (C5, C7 partly)
 
-- [ ] Rebuild `src/app/(tabs)/settings.tsx` in the order from design.md §7.11:
+- [x] Rebuild `src/app/(tabs)/settings.tsx` in the order from design.md §7.11:
   Account → Reading & listening → Language → Privacy & data → About.
-- [ ] Text size (system / large / extra large) with a live sample sentence.
-- [ ] Speak answers automatically (default off when a screen reader is active).
-- [ ] Speech speed (slow/normal/fast) wired to the player's rate.
-- [ ] Spoken language picker (start with `en-IN`; only add codes the backend
+- [x] Text size (system / large / extra large) with a live sample sentence.
+- [x] Speak answers automatically (default off when a screen reader is active).
+- [x] Speech speed (slow/normal/fast) wired to the player's rate.
+- [x] Spoken language picker (start with `en-IN`; only add codes the backend
   actually accepts) + note that answers are written in English.
-- [ ] Privacy text + "Delete All History" + confirmation.
-- [ ] About: app version, `model_version` from the last `/ask` (or a cached
+- [x] Privacy text + "Delete All History" + confirmation.
+- [x] About: app version, `model_version` from the last `/ask` (or a cached
   value), limitation paragraph, support link.
-- [ ] Every toggle/picker announces its new value.
+- [x] Every toggle/picker announces its new value.
 
-**Done when:** settings persist and change behaviour immediately; the About
-screen reveals `mock-0.0.0` in development.
+**Done:** settings persist and change behaviour immediately; the About screen
+shows the last model version and labels `mock-0.0.0` in development. The
+support action opens the repository's issue page. UI tests cover persistence,
+announcements, sign-out confirmation, deletion errors, and About metadata.
 
 ---
 
@@ -348,13 +350,13 @@ screen reveals `mock-0.0.0` in development.
 
 ### Tests
 
-- [ ] Component tests per phase (capture, preview, ask, transcript, answer,
+- [x] Component tests per phase (capture, preview, ask, transcript, answer,
   history, settings, consent).
-- [ ] One happy-path integration test with a mocked API:
+- [x] One happy-path integration test with a mocked API:
   sign in → photo → voice → answer → replay → history.
-- [ ] Error-path tests: permission denied, offline, 401 refresh, 413, 429, 503,
+- [x] Error-path tests: permission denied, offline, 401 refresh, 413, 429, 503,
   504, TTS failure.
-- [ ] Run `npm test -- --ci`, `npm run lint`, `npm run typecheck`,
+- [x] Run `npm test -- --ci`, `npm run lint`, `npm run typecheck`,
   `npm run format:check`.
 
 ### Device accessibility pass (blocking)
@@ -367,6 +369,9 @@ screen reveals `mock-0.0.0` in development.
 - [ ] Fix findings before release; re-run the checklist in design.md §10.
 
 ### Release
+
+Release work is intentionally left for the project owner. No release builds,
+signing, submission, or deployment were performed in this phase.
 
 - [ ] `app.json`: real name ("AskSight"), slug, scheme, icons, splash,
   permission strings, bundle identifiers.

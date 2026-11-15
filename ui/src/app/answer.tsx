@@ -36,7 +36,7 @@ export default function AnswerScreen() {
   const [ttsLoading, setTtsLoading] = useState(false);
   const [ttsError, setTtsError] = useState("");
   const shouldAutoSpeak = useAutoSpeak();
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const {
     play: playSpeech,
     stop: stopSpeech,
@@ -52,6 +52,10 @@ export default function AnswerScreen() {
   const autoStarted = useRef(false);
   const finishAnnounced = useRef(false);
   const clarification = isClarification(answer);
+
+  useEffect(() => {
+    if (params.model_version) update("lastModelVersion", params.model_version);
+  }, [params.model_version, update]);
 
   const prepareAudio = useCallback(async () => {
     setTtsError("");

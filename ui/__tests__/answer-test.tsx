@@ -4,6 +4,7 @@ import {
   screen,
   waitFor,
 } from "expo-router/testing-library";
+import * as SecureStore from "expo-secure-store";
 
 import * as api from "../src/lib/api";
 import * as a11y from "../src/lib/a11y";
@@ -114,6 +115,18 @@ describe("answer playback", () => {
       screen.getByText("The answer could not be saved to history."),
     ).toBeOnTheScreen();
     expect(screen.getByText("A red car.")).toBeOnTheScreen();
+  });
+
+  test("persists the latest model version for the About screen", async () => {
+    await renderAnswer(
+      "/answer?question=What%20is%20this&answer=A%20lamp.&model_version=mock-0.0.0",
+    );
+
+    await waitFor(async () => {
+      expect(await SecureStore.getItemAsync("asksight.settings")).toContain(
+        '"lastModelVersion":"mock-0.0.0"',
+      );
+    });
   });
 
   test("keeps the answer visible when TTS is unavailable", async () => {

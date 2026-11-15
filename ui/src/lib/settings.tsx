@@ -20,6 +20,7 @@ export type Settings = {
   textScale: TextScale;
   speechLanguage: string;
   consentGiven: boolean;
+  lastModelVersion: string | null;
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   textScale: "system",
   speechLanguage: "en-IN",
   consentGiven: false,
+  lastModelVersion: null,
 };
 
 const TEXT_SCALE: Record<TextScale, number> = {
@@ -79,6 +81,11 @@ function sanitize(value: unknown): Settings {
       typeof raw.consentGiven === "boolean"
         ? raw.consentGiven
         : DEFAULT_SETTINGS.consentGiven,
+    lastModelVersion:
+      typeof raw.lastModelVersion === "string" &&
+      raw.lastModelVersion.trim().length > 0
+        ? raw.lastModelVersion
+        : null,
   };
 }
 

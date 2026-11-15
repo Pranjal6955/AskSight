@@ -74,6 +74,9 @@ describe("route guard", () => {
     expect(
       screen.getByText(/stored in your account until you delete them/),
     ).toBeOnTheScreen();
+    expect(screen.queryByText(/sent to Sarvam/)).not.toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "Read More" }));
+    expect(await screen.findByText(/sent to Sarvam/)).toBeOnTheScreen();
 
     fireEvent.press(screen.getByRole("button", { name: "I Understand" }));
     await waitFor(() => expect(screen.getByText("John!")).toBeOnTheScreen());
