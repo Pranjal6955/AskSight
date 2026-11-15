@@ -29,6 +29,7 @@ class TestRouting(unittest.TestCase):
                 "/history/{entry_id}",
                 "/health/live",
                 "/health/ready",
+                "/health/model",
                 "/stt",
                 "/tts",
             },
@@ -52,6 +53,16 @@ class TestLifespan(unittest.TestCase):
                 self.assertTrue(fake.connected)
                 client.get("/openapi.json")
             self.assertFalse(fake.connected)
+
+    def test_model_load_failure_does_not_stop_the_api(self):
+        fake = FakeDB()
+        with (
+            patch.object(main, "db", fake),
+            patch.object(main, "get_inference_service", side_effect=RuntimeError("no checkpoint")),
+            TestClient(main.app) as client,
+        ):
+            self.assertEqual(client.get("/health/live").status_code, 200)
+            self.assertTrue(fake.connected)
 
 
 if __name__ == "__main__":

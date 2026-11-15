@@ -1,5 +1,6 @@
 """FastAPI application factory for the AskSight backend."""
 
+import logging
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -9,13 +10,23 @@ load_dotenv()
 from fastapi import FastAPI  # noqa: E402
 
 from app.api import ask, auth, health, history, images, speech  # noqa: E402
+from app.core.inference import get_inference_service  # noqa: E402
 from app.core.middleware import RequestContextMiddleware, setup_logging  # noqa: E402
 from app.db import db  # noqa: E402
+
+logger = logging.getLogger("asksight.startup")
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await db.connect()
+    try:
+        # Load once at startup so the first /ask does not pay the cold start.
+        get_inference_service()
+    except Exception:
+        # Auth, images and history stay up; /ask returns 503 and readiness
+        # reports the model as unavailable until the checkpoint is fixed.
+        logger.exception("inference_service_startup_failed")
     yield
     await db.disconnect()
 

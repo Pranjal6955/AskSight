@@ -136,12 +136,46 @@ Process is up. Always 200 if the process can serve traffic.
 ### `GET /health/ready`
 
 ```json
-{ "status": "ok", "checks": { "database": "ok" } }
+{ "status": "ok", "checks": { "database": "ok", "model": "ok" } }
 ```
 
-`200` when the database answers a probe query; `503` with
-`{ "status": "unavailable", "checks": { "database": "unavailable" } }`
-otherwise. The response never includes the connection string or driver errors.
+`200` only when the database answers a probe query **and** the inference
+service is loaded and ready; `503` otherwise, with the failing check marked
+`"unavailable"`. The response never includes the connection string, checkpoint
+path, or driver errors.
+
+During local development the mock inference service reports ready; check
+`model_version` on `/health/model` (it is `mock-0.0.0`) to confirm that no real
+checkpoint is loaded.
+
+### `GET /health/model`
+
+Operational view of the inference service. Unauthenticated; exposes no secrets
+or user content.
+
+```json
+{
+  "status": "ok",
+  "ready": true,
+  "model_version": "v0.1-colab",
+  "stats": {
+    "requests": 42,
+    "failures": 0,
+    "timeouts": 0,
+    "queue_time_median_s": 0.001,
+    "generation_time_median_s": 0.22,
+    "latency_median_s": 0.224,
+    "latency_p95_s": 0.284,
+    "process_rss_mb": 512.0
+  }
+}
+```
+
+`200` when the model is ready. `503` with
+`{ "status": "unavailable", "ready": false, "stats": {} }` when the checkpoint
+failed to load or the service is still warming up. `stats` is the model
+service's own `service.stats()`; the development mock returns a minimal object.
+Load failures are logged server-side and are never included in the response.
 
 ---
 

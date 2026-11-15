@@ -17,9 +17,14 @@ class DevMockInferenceService:
     """Placeholder mirroring asksight_model's protocol while Track B trains."""
 
     model_version = "mock-0.0.0"
+    protocol_version = "1"
+    ready = True
 
     def answer(self, image, question: str) -> str:
         return f"[mock answer] {question.strip()}"
+
+    def stats(self) -> dict:
+        return {"model_version": self.model_version, "ready": True}
 
 
 @lru_cache(maxsize=1)

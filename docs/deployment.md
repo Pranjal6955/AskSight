@@ -120,6 +120,11 @@ Depending on operational scale and budget, two primary deployment architectures 
 
 ### Phase 4: Containerization & Dockerfile Specifications
 
+> These are target specifications, not committed files: neither
+> `backend/Dockerfile` nor `model/Dockerfile` exists yet, and the model HTTP
+> wrapper (`asksight_model.service_app`) is not implemented. Add and verify
+> them before relying on the commands below.
+
 #### A. Backend Dockerfile (`backend/Dockerfile`)
 ```dockerfile
 FROM python:3.12-slim-bookworm
@@ -217,10 +222,16 @@ exact limits matter.
 
 1. **Kubernetes / Load Balancer Health Probes**:
    - Liveness Probe: `GET /health/live` (Interval: 10s, Timeout: 2s)
-   - Readiness Probe: `GET /health/ready` (Interval: 15s, Timeout: 3s)
+   - Readiness Probe: `GET /health/ready` (Interval: 15s, Timeout: 3s) — checks
+     both PostgreSQL and that the inference service loaded and is ready.
+   - Model detail: `GET /health/model` returns `model_version` plus the
+     inference `stats()` (requests, failures, timeouts, latency percentiles,
+     memory). Use it to confirm the expected checkpoint is loaded; a
+     `mock-0.0.0` version means no real checkpoint is configured.
 2. **Metrics**:
    - Track request latencies and response codes tagged with `x-request-id`.
-   - Monitor GPU utilization (`nvidia-smi` exporter), VRAM consumption, and inference queue wait times.
+   - Scrape `/health/model` `stats` for inference counts, latency percentiles,
+     and memory; scrape GPU utilization (`nvidia-smi` exporter) and VRAM.
 3. **Structured Logging**:
    - JSON structured logging is already integrated in `backend/app/core/middleware.py`. Logs forward directly to Datadog, CloudWatch, or Grafana Loki.
 

@@ -114,7 +114,7 @@ written, split fingerprints recorded.
 This checkpoint exists to prove the machinery works. Its answers are weak — it
 saw 100 questions; do not demo it.
 
-### Full run — Google Colab T4 (recommended)
+### Full run — Google Colab T4 or Kaggle (recommended)
 
 `model/notebooks/colab_train.ipynb` (committed to the repo so Colab can clone it):
 
@@ -141,8 +141,25 @@ The notebook clones `feat/multimodal-core-workflow` — `main` does not carry
 Success criteria: `vqa_accuracy` printed from the held-out test split (this is
 the headline number), latency recorded, and a checkpoint folder matching the
 contents listed in "Training and checkpoints (B4)" above. Colab runtimes are
-ephemeral — the zip is the saved result. If a quality bump is needed later,
-train the fuller subset (`--train 20000`, 3–6 h) on Kaggle or Colab Pro.
+ephemeral — the zip is the saved result.
+
+### Full run — Kaggle (free GPU, better for the larger run)
+
+The same notebook works on Kaggle, which gives more weekly GPU time than free
+Colab and is less likely to cut a multi-hour run.
+
+1. Create a Kaggle Notebook, set **Settings → Accelerator → GPU T4 ×2** (or
+   P100), and enable **Settings → Internet** — the notebook clones the repo and
+   downloads the dataset.
+2. **File → Import notebook** and upload `colab_train.ipynb` (or copy its cells).
+3. In the config cell, set `VERSION`, `TRAIN/VAL/TEST`, and
+   `DTYPE = "float16"`, then **Run all**.
+4. Download the checkpoint zip from the notebook's **Output** tab. On Kaggle the
+   Colab `files.download` cell falls back to printing the zip path.
+
+The same rules apply: push the branch first (the notebook clones
+`feat/multimodal-core-workflow`), and save the zip before closing the session.
+Use this path for the larger `20,000`-question run (`--train 20000`, ~3–6 h).
 
 ## Data pipeline (B3)
 
