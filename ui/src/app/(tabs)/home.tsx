@@ -63,10 +63,12 @@ export default function HomeScreen() {
             </Text>
           </View>
 
-          <View
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Take a photo. Opens the camera."
+            accessibilityHint="You can also choose a photo from your library."
+            onPress={() => router.push("/capture" as never)}
             className="min-h-[255px] overflow-hidden rounded-[30px] bg-ink px-6 py-7"
-            accessibilityRole="summary"
-            accessibilityLabel="Ask with Camera. Take a photo and get an AI description of your surroundings"
           >
             <View
               className="absolute -bottom-10 -right-10 h-56 w-56 rounded-full border-[18px] border-[#171717]"
@@ -94,7 +96,24 @@ export default function HomeScreen() {
                 Capture your surroundings and get an AI description.
               </Text>
             </View>
-          </View>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Choose a photo from your library"
+            onPress={() => router.push("/photo-preview?pick=1" as never)}
+            className="mt-3 min-h-14 flex-row items-center justify-center gap-3 rounded-field border-2 border-inputBorder bg-white px-5 py-3"
+          >
+            <MaterialCommunityIcons
+              name="image-multiple-outline"
+              size={24}
+              color="#000000"
+              importantForAccessibility="no-hide-descendants"
+            />
+            <Text className="text-lg font-semibold text-ink">
+              Choose from Library
+            </Text>
+          </Pressable>
 
           <View className="mt-7">
             <View className="flex-row items-center justify-between">

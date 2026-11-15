@@ -29,6 +29,15 @@ function RootNavigator() {
       <Stack.Screen name="index" />
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="capture"
+          options={{ presentation: "fullScreenModal" }}
+        />
+        <Stack.Screen
+          name="photo-preview"
+          options={{ presentation: "modal" }}
+        />
+        <Stack.Screen name="ask" options={{ presentation: "modal" }} />
       </Stack.Protected>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="login" />
