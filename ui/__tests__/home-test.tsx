@@ -22,9 +22,11 @@ const USER = {
 
 function mockSignedIn() {
   const api = require("../src/lib/api");
-  jest
-    .spyOn(api, "login")
-    .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+  jest.spyOn(api, "login").mockResolvedValue({
+    access_token: "t",
+    refresh_token: "r",
+    token_type: "bearer",
+  });
   jest.spyOn(api, "me").mockResolvedValue(USER);
 }
 

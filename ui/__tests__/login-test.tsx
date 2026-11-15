@@ -107,9 +107,11 @@ describe("Login screen", () => {
   describe("sign in flow", () => {
     test("calls the API with trimmed email and redirects on success", async () => {
       const api = require("../src/lib/api");
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -142,9 +144,11 @@ describe("Login screen", () => {
 
     test("ignores the secondary link during the success hold and still opens Home", async () => {
       const api = require("../src/lib/api");
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -240,7 +244,11 @@ describe("Login screen", () => {
       const loginSpy = jest
         .spyOn(api, "login")
         .mockRejectedValueOnce(new Error("Invalid email or Password"))
-        .mockResolvedValueOnce({ access_token: "t", token_type: "bearer" });
+        .mockResolvedValueOnce({
+          access_token: "t",
+          refresh_token: "r",
+          token_type: "bearer",
+        });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -294,5 +302,26 @@ describe("Login screen", () => {
         ),
       ).toBeOnTheScreen();
     });
+  });
+});
+
+describe("Session notice", () => {
+  test("shows the reason when the session ended", async () => {
+    const api = require("../src/lib/api");
+    const holder: { expire?: (message: string) => void } = {};
+    jest.spyOn(api, "setSessionExpiredHandler").mockImplementation(((
+      handler: ((message: string) => void) | null,
+    ) => {
+      holder.expire = handler ?? undefined;
+    }) as never);
+
+    await renderLogin();
+    await act(async () => {
+      holder.expire?.("Your session has expired. Please sign in again.");
+    });
+
+    expect(
+      screen.getByText("Your session has expired. Please sign in again."),
+    ).toBeOnTheScreen();
   });
 });

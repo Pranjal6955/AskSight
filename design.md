@@ -4,6 +4,7 @@
 **Audience of the product:** blind and low-vision people. Every choice below is
 made for someone who may not see the screen at all, may see only very large
 shapes, or may see the screen with magnification and high contrast.
+**Implementation plan:** [plan.md](plan.md)
 **Companion docs:** [API contract](docs/api-contracts.md) ·
 [deployment](docs/deployment.md) · [backend remaining work](backend/REMAINING_WORK.md) ·
 [model README](model/README.md) · [task list](docs/Task.md)

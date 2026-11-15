@@ -1,13 +1,53 @@
 import {
+  ApiError,
   readError,
   toFriendlyMessage,
   signup,
   login,
   me,
+  refresh,
+  uploadImage,
+  getImage,
+  deleteHistoryEntry,
+  setSessionExpiredHandler,
 } from "../src/lib/api";
+import {
+  getAccessToken,
+  getRefreshToken,
+  setAccessToken,
+  setRefreshToken,
+} from "../src/lib/session";
+
+const USER = {
+  id: "1",
+  name: "John Smith",
+  email: "john@example.com",
+  createdAt: "2026-01-01T00:00:00Z",
+};
 
 const fakeResponse = (status: number, body: unknown) =>
-  ({ status, json: async () => body }) as unknown as Response;
+  ({
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+    headers: new Headers({ "Content-Type": "application/json" }),
+  }) as unknown as Response;
+
+const jsonBody = (
+  status: number,
+  body: unknown,
+  headers: Record<string, string> = {},
+) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", ...headers },
+  });
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  setAccessToken(null);
+  setSessionExpiredHandler(null);
+});
 
 describe("readError", () => {
   test("uses the human detail string returned by 401", async () => {
@@ -204,14 +244,16 @@ describe("signup", () => {
 
 describe("login", () => {
   test("sends a POST request to /auth/login with credentials", async () => {
-    const fetchSpy = jest
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ access_token: "abc123", token_type: "bearer" }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      );
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          access_token: "abc123",
+          refresh_token: "refresh123",
+          token_type: "bearer",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
 
     const result = await login({
       email: "john@example.com",
@@ -228,7 +270,11 @@ describe("login", () => {
         }),
       }),
     );
-    expect(result).toEqual({ access_token: "abc123", token_type: "bearer" });
+    expect(result).toEqual({
+      access_token: "abc123",
+      refresh_token: "refresh123",
+      token_type: "bearer",
+    });
 
     fetchSpy.mockRestore();
   });
@@ -295,5 +341,221 @@ describe("me", () => {
     await expect(me("bad-token")).rejects.toThrow(
       "Could not validate credentials",
     );
+  });
+});
+
+describe("error fallbacks", () => {
+  test.each([
+    [413, "That file is too large. Please choose a smaller one."],
+    [415, "That file type is not supported. Please choose a different file."],
+    [429, "Too many requests. Please wait a moment and try again."],
+    [504, "That took too long. Please try again."],
+  ])("maps %i to a plain-language sentence", async (status, expected) => {
+    expect(await readError(fakeResponse(status, {}))).toBe(expected);
+  });
+
+  test.each([
+    ["question", "Please enter a question of 500 characters or fewer."],
+    ["text", "There is no text to read aloud."],
+    ["image_id", "Please choose a photo first."],
+    ["file", "Please choose a file."],
+    ["refresh_token", "Your session has expired. Please sign in again."],
+  ])("maps a %s validation issue", async (field, expected) => {
+    const err = await readError(
+      fakeResponse(422, { detail: [{ loc: ["body", field], msg: "" }] }),
+    );
+    expect(err).toBe(expected);
+  });
+});
+
+describe("refresh", () => {
+  test("posts the refresh token and returns the rotated pair", async () => {
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonBody(200, {
+        access_token: "a2",
+        refresh_token: "r2",
+        token_type: "bearer",
+      }),
+    );
+
+    const result = await refresh("r1");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining("/auth/refresh"),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ refresh_token: "r1" }),
+      }),
+    );
+    expect(result).toEqual({
+      access_token: "a2",
+      refresh_token: "r2",
+      token_type: "bearer",
+    });
+  });
+});
+
+describe("session-aware requests", () => {
+  test("refreshes once on 401, retries, and persists the rotated token", async () => {
+    setAccessToken("old");
+    await setRefreshToken("r1");
+
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonBody(401, { detail: "expired" }))
+      .mockResolvedValueOnce(
+        jsonBody(200, {
+          access_token: "new",
+          refresh_token: "r2",
+          token_type: "bearer",
+        }),
+      )
+      .mockResolvedValueOnce(jsonBody(200, USER));
+
+    await expect(me()).resolves.toEqual(USER);
+
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy.mock.calls[1][0]).toContain("/auth/refresh");
+    expect(fetchSpy.mock.calls[2][1]?.headers).toEqual(
+      expect.objectContaining({ Authorization: "Bearer new" }),
+    );
+    expect(getAccessToken()).toBe("new");
+    expect(await getRefreshToken()).toBe("r2");
+  });
+
+  test("a rejected refresh clears the session and notifies the app", async () => {
+    const handler = jest.fn();
+    setSessionExpiredHandler(handler);
+    setAccessToken("old");
+    await setRefreshToken("r1");
+
+    jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonBody(401, { detail: "expired" }))
+      .mockResolvedValueOnce(
+        jsonBody(401, {
+          detail: "Invalid or expired session. Please sign in again.",
+        }),
+      );
+
+    await expect(me()).rejects.toBeInstanceOf(ApiError);
+
+    expect(handler).toHaveBeenCalledWith(
+      "Invalid or expired session. Please sign in again.",
+    );
+    expect(getAccessToken()).toBeNull();
+    expect(await getRefreshToken()).toBeNull();
+  });
+
+  test("two simultaneous 401s share a single refresh", async () => {
+    setAccessToken("old");
+    await setRefreshToken("r1");
+
+    let releaseRefresh = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    let refreshCalls = 0;
+
+    jest.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).includes("/auth/refresh")) {
+        refreshCalls += 1;
+        await gate;
+        return jsonBody(200, {
+          access_token: "new",
+          refresh_token: "r2",
+          token_type: "bearer",
+        });
+      }
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+      return headers.Authorization === "Bearer new"
+        ? jsonBody(200, USER)
+        : jsonBody(401, { detail: "expired" });
+    });
+
+    const first = me();
+    const second = me();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(refreshCalls).toBe(1);
+    releaseRefresh();
+    await expect(Promise.all([first, second])).resolves.toEqual([USER, USER]);
+  });
+
+  test("captures the request id on an API error", async () => {
+    setAccessToken("t");
+
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonBody(
+        400,
+        { detail: "That request was not valid." },
+        {
+          "X-Request-ID": "req-1",
+        },
+      ),
+    );
+
+    await expect(me()).rejects.toMatchObject({
+      message: "That request was not valid.",
+      status: 400,
+      requestId: "req-1",
+    });
+  });
+});
+
+describe("delete", () => {
+  test("returns void for a 204 with no body", async () => {
+    setAccessToken("t");
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    await expect(deleteHistoryEntry("id 1")).resolves.toBeUndefined();
+
+    expect(fetchSpy.mock.calls[0][0]).toContain("/history/id%201");
+    expect(fetchSpy.mock.calls[0][1]?.method).toBe("DELETE");
+  });
+});
+
+describe("uploads and downloads", () => {
+  test("lets fetch set the multipart boundary", async () => {
+    setAccessToken("t");
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonBody(201, {
+        id: "img1",
+        mime_type: "image/png",
+        size_bytes: 3,
+        width: 1,
+        height: 1,
+        created_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+
+    await uploadImage({
+      uri: "file:///a.png",
+      name: "a.png",
+      type: "image/png",
+    });
+
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
+      undefined,
+    );
+    expect(init.body).toBeInstanceOf(FormData);
+  });
+
+  test("returns image bytes with the response content type", async () => {
+    setAccessToken("t");
+    jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new Uint8Array([1, 2, 3]), {
+        status: 200,
+        headers: { "Content-Type": "image/png" },
+      }),
+    );
+
+    const result = await getImage("img1");
+
+    expect(result.mimeType).toBe("image/png");
+    expect(new Uint8Array(result.bytes)).toEqual(new Uint8Array([1, 2, 3]));
   });
 });

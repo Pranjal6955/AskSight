@@ -20,7 +20,7 @@ import { useAuth } from "@/lib/auth";
 import { useKeyboardAwareScroll } from "@/lib/useKeyboardAwareScroll";
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, sessionNotice } = useAuth();
   const { scrollRef, trackFocus } = useKeyboardAwareScroll();
   const passwordRef = useRef<TextInput>(null);
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -130,6 +130,23 @@ export default function LoginScreen() {
                 onSubmitEditing={handleSignIn}
               />
             </View>
+
+            {sessionNotice ? (
+              <View
+                className="mt-4 flex-row items-start gap-3 rounded-field border-2 border-inputBorder bg-white p-4"
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <MaterialCommunityIcons
+                  name="information-outline"
+                  size={24}
+                  color="#000000"
+                />
+                <Text className="flex-1 text-xl font-semibold leading-7 text-ink">
+                  {sessionNotice}
+                </Text>
+              </View>
+            ) : null}
 
             {error ? (
               <View

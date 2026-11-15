@@ -143,9 +143,11 @@ describe("Signup screen", () => {
         email: "john@example.com",
         createdAt: "2026-01-01T00:00:00Z",
       });
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Doe",
@@ -178,9 +180,11 @@ describe("Signup screen", () => {
         email: "john@example.com",
         createdAt: "2026-01-01T00:00:00Z",
       });
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Doe",
@@ -221,9 +225,11 @@ describe("Signup screen", () => {
         email: "john@example.com",
         createdAt: "2026-01-01T00:00:00Z",
       });
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Doe",
@@ -251,9 +257,11 @@ describe("Signup screen", () => {
     test("shows loading state while creating the account", async () => {
       const api = require("../src/lib/api");
       jest.spyOn(api, "signup").mockReturnValue(new Promise(() => {}));
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Doe",
@@ -340,9 +348,11 @@ describe("Signup screen", () => {
         email: "john@example.com",
         createdAt: "2026-01-01T00:00:00Z",
       });
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Doe",
