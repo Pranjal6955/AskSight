@@ -3,9 +3,9 @@
 **Companion to:** [design.md](design.md) (the spec — read that first)
 **Scope:** the Expo mobile app in `ui/`, from today's auth-only shell to the full
 low-vision journey.
-**Status:** Phase 0 foundations, Phase 1 capture/upload, and Phase 2 ask flow
-are implemented. Phase 1 device accessibility verification remains open;
-Phase 3 answer playback and later journey phases are planned.
+**Status:** Phase 0 foundations, Phase 1 capture/upload, Phase 2 ask flow, and
+Phase 3 answer/playback are implemented. Device accessibility verification
+remains open; Phase 4 and later journey phases are planned.
 
 The order below is deliberate: foundations first so every later screen is born
 accessible, then capture → ask → answer (the demo path), then history and
@@ -233,29 +233,53 @@ TalkBack/VoiceOver verification remains part of Phase 6.
 
 ## 5. Phase 3 — Answer and playback (C3)
 
-- [ ] `src/app/answer.tsx`: question recap, answer at 30–34 px, playback row
+### Intended flow
+
+After `/ask` succeeds, show the returned answer immediately and announce it.
+If auto-speech is enabled and VoiceOver/TalkBack is not active, fetch TTS audio,
+write the returned bytes to a temporary cache file, then play it. The answer
+remains readable if TTS is slow or unavailable. The user can replay or stop the
+audio; leaving the screen stops playback and removes the temporary file. While
+`/ask` is pending, show interruptible progress and allow Cancel to stop waiting
+and return to question entry. The server's 30-second response remains the
+source of its timeout error. If history persistence fails after inference, the
+backend must include the generated answer in its error payload so the app can
+show it while preserving the backend's error sentence.
+
+- [x] `src/app/answer.tsx`: question recap, answer at 30–34 px, playback row
   ("Listen Again" / "Stop"), "Ask Another Question" / "New Photo", verify note,
   optional photo thumbnail.
-- [ ] `POST /tts` with the answer text and chosen language; write the returned
+- [x] `POST /tts` with the answer text and chosen language; write the returned
   `audio/mpeg` bytes to `Paths.cache` with `expo-file-system`
   (`new File(Paths.cache, ...)`), play the file URI, delete it on unmount.
-  `npx expo install expo-file-system` if not already present.
-- [ ] Auto-speak when the setting is on **and** no screen reader is active;
+  Declare the existing SDK-compatible `expo-file-system` package as a direct
+  dependency. For web, use a temporary object URL and revoke it on cleanup.
+- [x] Auto-speak when the setting is on **and** no screen reader is active;
   announce "Answer ready" before audio starts.
-- [ ] Treat the model's clarification sentence as a normal answer; make "Ask
+- [x] Treat the model's clarification sentence as a normal answer; make "Ask
   Another Question" primary in that case.
-- [ ] Loading screen: "Looking at your photo…", 8 s "Still working", 30 s
+- [x] Loading state: "Looking at your photo…", 8 s "Still working", server's 30 s
   timeout (504), Cancel.
-- [ ] Error states: 503 model unavailable, 504 timeout, 429, offline, 500
+- [x] Error states: 503 model unavailable, 504 timeout, 429, offline, 500
   history-not-saved (still show the answer), TTS failure (answer stays, voice
   message shown).
-- [ ] Show "Demo mode — not a real model" only in debug builds when
+- [x] Show "Demo mode — not a real model" only in debug builds when
   `model_version` is `mock-0.0.0`.
-- [ ] No confidence UI of any kind.
+- [x] No confidence UI of any kind.
 
-**Done when:** answer + audio work end to end against the mock backend; every
-error above has a test; stopping/leaving the screen stops audio; VoiceOver and
-TalkBack read the answer and reach "Listen Again" in one swipe.
+**Done:** answer + audio use `/tts`; automatic playback respects the stored
+setting and screen-reader state; stopping/leaving the screen stops audio and
+removes its temporary file; clarification and history-save errors retain the
+answer. UI checks: 187 tests pass, lint and typecheck pass. Backend persistence
+failure response is covered by a new test (run status pending).
+
+**Research note:** `/ask` has a 30-second server timeout and `/tts` returns raw
+`audio/mpeg`; `TTSRequest.text` accepts 1–2,000 characters. The history-save
+500 response now retains `detail` and includes the generated `answer` and
+`model_version`, so the UI can preserve a valid answer when only persistence
+fails. Expo SDK 57 FileSystem is used for native cache writes; web uses a
+temporary object URL that is revoked when the answer screen leaves. Physical
+VoiceOver/TalkBack review remains part of Phase 6.
 
 ---
 

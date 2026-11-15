@@ -9,8 +9,9 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { ProgressAnnouncer } from "@/components/ProgressAnnouncer";
+import { ThinkingPanel } from "@/components/ThinkingPanel";
 import { announce, focus } from "@/lib/a11y";
-import { ask, toFriendlyMessage } from "@/lib/api";
+import { useAskQuestion } from "@/lib/useAskQuestion";
 
 export default function TranscriptScreen() {
   const params = useLocalSearchParams<{
@@ -19,10 +20,9 @@ export default function TranscriptScreen() {
     transcript?: string;
   }>();
   const [transcript, setTranscript] = useState(params.transcript ?? "");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const primaryRef = useRef<View>(null);
   const inputRef = useRef<TextInput>(null);
+  const askRequest = useAskQuestion(params.image_id ?? "");
 
   useEffect(() => {
     if (!params.transcript?.trim()) return;
@@ -35,11 +35,9 @@ export default function TranscriptScreen() {
   }, [params.transcript]);
 
   async function continueToAsk() {
-    if (!transcript.trim() || !params.image_id || loading) return;
-    setError("");
-    setLoading(true);
-    try {
-      const result = await ask(params.image_id, transcript.trim());
+    if (!transcript.trim() || !params.image_id || askRequest.loading) return;
+    const result = await askRequest.submit(transcript.trim());
+    if (result) {
       router.replace({
         pathname: "/answer",
         params: {
@@ -47,27 +45,19 @@ export default function TranscriptScreen() {
           photo_uri: params.photo_uri ?? "",
           question: transcript.trim(),
           ...result,
+          history_error: result.historyError,
         },
       } as never);
-    } catch (cause) {
-      setError(
-        toFriendlyMessage(
-          cause,
-          "We couldn't answer that question. Please try again.",
-        ),
-      );
-    } finally {
-      setLoading(false);
     }
   }
 
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "bottom"]}>
       <ProgressAnnouncer
-        working={loading}
+        working={askRequest.loading}
         startMessage="Looking at your photo."
         stillWorkingMessage="Still looking at your photo."
-        finishMessage="Answer ready."
+        finishMessage={null}
       />
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -106,7 +96,9 @@ export default function TranscriptScreen() {
           {!params.image_id ? (
             <StatusBanner tone="error" message="Please choose a photo first." />
           ) : null}
-          {error ? <StatusBanner tone="error" message={error} /> : null}
+          {askRequest.error ? (
+            <StatusBanner tone="error" message={askRequest.error} />
+          ) : null}
           <AppText variant="bodyLarge" className="text-muted">
             Review your question. You can edit it before sending.
           </AppText>
@@ -123,27 +115,44 @@ export default function TranscriptScreen() {
           <AppText variant="supporting" className="text-muted">
             {transcript.length} of 500 characters
           </AppText>
-          <View ref={primaryRef} collapsable={false}>
-            <PrimaryButton
-              label="Ask This Question"
-              loading={loading}
-              loadingLabel="Looking at your photo…"
-              disabled={!transcript.trim() || !params.image_id}
-              onPress={() => void continueToAsk()}
+          {askRequest.loading ? (
+            <ThinkingPanel
+              onCancel={() => {
+                askRequest.cancel();
+                announce("Stopped waiting. The request may still complete.");
+                router.replace({
+                  pathname: "/ask",
+                  params: {
+                    image_id: params.image_id ?? "",
+                    photo_uri: params.photo_uri ?? "",
+                    question: transcript,
+                  },
+                } as never);
+              }}
             />
-          </View>
-          <SecondaryButton
-            label="Speak Again"
-            onPress={() =>
-              router.replace({
-                pathname: "/ask",
-                params: {
-                  image_id: params.image_id ?? "",
-                  photo_uri: params.photo_uri ?? "",
-                },
-              } as never)
-            }
-          />
+          ) : (
+            <View ref={primaryRef} collapsable={false}>
+              <PrimaryButton
+                label={askRequest.error ? "Try Again" : "Ask This Question"}
+                disabled={!transcript.trim() || !params.image_id}
+                onPress={() => void continueToAsk()}
+              />
+            </View>
+          )}
+          {!askRequest.loading ? (
+            <SecondaryButton
+              label="Speak Again"
+              onPress={() =>
+                router.replace({
+                  pathname: "/ask",
+                  params: {
+                    image_id: params.image_id ?? "",
+                    photo_uri: params.photo_uri ?? "",
+                  },
+                } as never)
+              }
+            />
+          ) : null}
           <SecondaryButton
             label="Edit"
             onPress={() => inputRef.current?.focus()}

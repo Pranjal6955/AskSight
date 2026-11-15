@@ -83,12 +83,19 @@ type JsonInit = Omit<RequestInit, "headers"> & {
 export class ApiError extends Error {
   status: number;
   requestId: string | null;
+  payload: unknown;
 
-  constructor(message: string, status: number, requestId: string | null) {
+  constructor(
+    message: string,
+    status: number,
+    requestId: string | null,
+    payload?: unknown,
+  ) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.requestId = requestId;
+    this.payload = payload;
   }
 }
 
@@ -125,10 +132,15 @@ async function sendOk(
 ): Promise<Response> {
   const res = await send(path, init, token);
   if (!res.ok) {
+    const payload = await res
+      .clone()
+      .json()
+      .catch(() => null);
     throw new ApiError(
       await readError(res),
       res.status,
       res.headers.get("X-Request-ID"),
+      payload,
     );
   }
   return res;
@@ -390,12 +402,13 @@ export function getImage(id: string) {
   );
 }
 
-export function ask(imageId: string, question: string) {
+export function ask(imageId: string, question: string, signal?: AbortSignal) {
   return authorized<AskResponse>(
     "/ask",
     {
       method: "POST",
       body: JSON.stringify({ image_id: imageId, question }),
+      ...(signal ? { signal } : {}),
     },
     parseJson,
   );
@@ -409,13 +422,22 @@ export function transcribe(file: UploadFile) {
   );
 }
 
-export function synthesize(text: string, language?: string, voice?: string) {
+export function synthesize(
+  text: string,
+  language?: string,
+  voice?: string,
+  signal?: AbortSignal,
+) {
   const body: { text: string; language?: string; voice?: string } = { text };
   if (language) body.language = language;
   if (voice) body.voice = voice;
   return authorized<BinaryBody>(
     "/tts",
-    { method: "POST", body: JSON.stringify(body) },
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      ...(signal ? { signal } : {}),
+    },
     binary,
   );
 }

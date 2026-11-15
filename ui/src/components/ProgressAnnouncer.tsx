@@ -6,7 +6,7 @@ type Props = {
   working: boolean;
   startMessage: string;
   stillWorkingMessage: string;
-  finishMessage: string;
+  finishMessage: string | null;
   delayMs?: number;
 };
 
@@ -32,7 +32,7 @@ export function ProgressAnnouncer({
       return () => clearTimeout(timer);
     }
 
-    if (wasWorking.current) {
+    if (wasWorking.current && finishMessage) {
       wasWorking.current = false;
       announce(finishMessage, { queue: true });
     }

@@ -206,6 +206,8 @@ class TestAsk(AskApiTestCase):
             res = self.ask(image_id, question="What does the letter say?")
         self.assertEqual(res.status_code, 500)
         self.assertEqual(res.json()["detail"], ask_module.NOT_SAVED)
+        self.assertEqual(res.json()["answer"], self.service.result)
+        self.assertEqual(res.json()["model_version"], self.service.model_version)
         joined = "\n".join(logs.output)
         self.assertIn("history_persist_failed", joined)
         self.assertIn(image_id, joined)

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   setAudioModeAsync,
   useAudioPlayer,
@@ -8,20 +9,29 @@ export function useSpeech() {
   const player = useAudioPlayer(null);
   const status = useAudioPlayerStatus(player);
 
-  async function play(uri: string) {
-    await setAudioModeAsync({
-      allowsRecording: false,
-      playsInSilentMode: true,
-      interruptionMode: "duckOthers",
-    });
-    player.replace(uri);
-    player.play();
-  }
+  const play = useCallback(
+    async (uri: string, rate: number) => {
+      await setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: true,
+        interruptionMode: "duckOthers",
+      });
+      player.replace(uri);
+      player.setPlaybackRate(rate);
+      player.play();
+    },
+    [player],
+  );
 
-  async function stop() {
+  const stop = useCallback(async () => {
     player.pause();
-    await player.seekTo(0);
-  }
+    await player.seekTo(0).catch(() => {});
+  }, [player]);
 
-  return { play, stop, isPlaying: status.playing };
+  return {
+    play,
+    stop,
+    isPlaying: status.playing,
+    didJustFinish: status.didJustFinish,
+  };
 }

@@ -17,9 +17,11 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ProgressAnnouncer } from "@/components/ProgressAnnouncer";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { StatusBanner } from "@/components/StatusBanner";
-import { ask, toFriendlyMessage, transcribe, type UploadFile } from "@/lib/api";
+import { ThinkingPanel } from "@/components/ThinkingPanel";
+import { toFriendlyMessage, transcribe, type UploadFile } from "@/lib/api";
 import { announce } from "@/lib/a11y";
 import { useRecorder } from "@/lib/useRecorder";
+import { useAskQuestion } from "@/lib/useAskQuestion";
 
 const EXAMPLES = [
   "What does this say?",
@@ -36,13 +38,15 @@ export default function AskScreen() {
   const params = useLocalSearchParams<{
     image_id?: string;
     photo_uri?: string;
+    question?: string;
   }>();
   const imageId = params.image_id ?? "";
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(params.question ?? "");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState<"transcribing" | "asking" | "">("");
+  const [busy, setBusy] = useState<"transcribing" | "">("");
   const [permissionPrompt, setPermissionPrompt] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const askRequest = useAskQuestion(imageId);
 
   const processRecording = useCallback(
     async (file: UploadFile) => {
@@ -122,10 +126,8 @@ export default function AskScreen() {
       setError("Please enter a question or speak it.");
       return;
     }
-    setError("");
-    setBusy("asking");
-    try {
-      const answer = await ask(imageId, cleaned);
+    const answer = await askRequest.submit(cleaned);
+    if (answer) {
       router.replace({
         pathname: "/answer",
         params: {
@@ -133,22 +135,14 @@ export default function AskScreen() {
           photo_uri: params.photo_uri ?? "",
           question: cleaned,
           ...answer,
+          history_error: answer.historyError,
         },
       } as never);
-    } catch (cause) {
-      setError(
-        toFriendlyMessage(
-          cause,
-          "We couldn't answer that question. Please try again.",
-        ),
-      );
-    } finally {
-      setBusy("");
     }
   }
 
   const micState =
-    busy === "transcribing"
+    busy === "transcribing" || askRequest.loading
       ? "processing"
       : recorder.isRecording
         ? "listening"
@@ -157,19 +151,19 @@ export default function AskScreen() {
   return (
     <SafeAreaView className="flex-1 bg-canvas" edges={["top", "bottom"]}>
       <ProgressAnnouncer
-        working={busy === "transcribing" || busy === "asking"}
+        working={busy === "transcribing" || askRequest.loading}
         startMessage={
-          busy === "asking"
+          askRequest.loading
             ? "Looking at your photo."
             : "Transcribing your question."
         }
         stillWorkingMessage={
-          busy === "asking"
-            ? "Still looking at your photo."
+          askRequest.loading
+            ? "Still working. This can take up to 30 seconds."
             : "Still transcribing."
         }
         finishMessage={
-          busy === "asking" ? "Answer ready." : "Transcription finished."
+          busy === "transcribing" ? "Transcription finished." : null
         }
       />
       <ScrollView
@@ -211,6 +205,9 @@ export default function AskScreen() {
             <StatusBanner tone="error" message="Please choose a photo first." />
           ) : null}
           {error ? <StatusBanner tone="error" message={error} /> : null}
+          {askRequest.error ? (
+            <StatusBanner tone="error" message={askRequest.error} />
+          ) : null}
           {recorder.error ? (
             <StatusBanner tone="error" message={recorder.error} />
           ) : null}
@@ -306,15 +303,22 @@ export default function AskScreen() {
               </Pressable>
             ))}
           </View>
-          <PrimaryButton
-            label="Ask"
-            loading={busy === "asking"}
-            loadingLabel="Looking at your photo…"
-            disabled={
-              !imageId || recorder.isRecording || busy === "transcribing"
-            }
-            onPress={() => void submitQuestion()}
-          />
+          {askRequest.loading ? (
+            <ThinkingPanel
+              onCancel={() => {
+                askRequest.cancel();
+                announce("Stopped waiting. The request may still complete.");
+              }}
+            />
+          ) : (
+            <PrimaryButton
+              label={askRequest.error ? "Try Again" : "Ask"}
+              disabled={
+                !imageId || recorder.isRecording || busy === "transcribing"
+              }
+              onPress={() => void submitQuestion()}
+            />
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>

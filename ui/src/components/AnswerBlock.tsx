@@ -1,5 +1,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Image, Pressable, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, View } from "react-native";
+
+import { useTextScale } from "@/lib/settings";
 
 import { AppText } from "./AppText";
 
@@ -10,6 +12,7 @@ type Props = {
   onPlaybackPress: () => void;
   photoUri?: string;
   clarification?: boolean;
+  isLoadingAudio?: boolean;
 };
 
 export function AnswerBlock({
@@ -19,30 +22,64 @@ export function AnswerBlock({
   onPlaybackPress,
   photoUri,
   clarification = false,
+  isLoadingAudio = false,
 }: Props) {
+  const scale = useTextScale();
   return (
     <View className="gap-4">
-      <AppText variant="supporting" className="text-muted">
+      <AppText variant="body" className="text-muted">
         You asked: {question}
       </AppText>
-      <AppText variant="answer" className="text-ink">
+      <AppText
+        variant="answer"
+        style={{
+          fontSize: 32 * scale,
+          lineHeight: 40 * scale,
+          fontWeight: "600",
+        }}
+        className="text-ink"
+      >
         {answer}
       </AppText>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={isPlaying ? "Stop speaking" : "Listen Again"}
-        accessibilityState={{ selected: isPlaying }}
+        accessibilityLabel={
+          isLoadingAudio
+            ? "Preparing spoken answer"
+            : isPlaying
+              ? "Stop speaking"
+              : "Listen Again"
+        }
+        accessibilityState={{
+          selected: isPlaying,
+          busy: isLoadingAudio,
+          disabled: isLoadingAudio,
+        }}
+        disabled={isLoadingAudio}
         onPress={onPlaybackPress}
-        className="min-h-14 flex-row items-center justify-center gap-3 rounded-field bg-brand px-5 py-3"
+        className={`min-h-14 flex-row items-center justify-center gap-3 rounded-field px-5 py-3 ${clarification ? "border-2 border-brand bg-canvas" : "bg-brand"}`}
       >
+        {isLoadingAudio ? (
+          <ActivityIndicator
+            color="#000000"
+            importantForAccessibility="no-hide-descendants"
+          />
+        ) : null}
         <MaterialCommunityIcons
-          name={isPlaying ? "stop" : "volume-high"}
+          name={isLoadingAudio ? "loading" : isPlaying ? "stop" : "volume-high"}
           size={24}
-          color="#FFFFFF"
+          color={clarification ? "#000000" : "#FFFFFF"}
           importantForAccessibility="no-hide-descendants"
         />
-        <AppText variant="bodyLarge" className="font-bold text-white">
-          {isPlaying ? "Stop" : "Listen Again"}
+        <AppText
+          variant="bodyLarge"
+          className={`font-bold ${clarification ? "text-brand-link" : "text-white"}`}
+        >
+          {isLoadingAudio
+            ? "Preparing audio…"
+            : isPlaying
+              ? "Stop"
+              : "Listen Again"}
         </AppText>
       </Pressable>
       <AppText
@@ -50,7 +87,11 @@ export function AnswerBlock({
         accessibilityLiveRegion="polite"
         className="text-muted"
       >
-        {isPlaying ? "Speaking…" : "Stopped"}
+        {isPlaying
+          ? "Speaking…"
+          : isLoadingAudio
+            ? "Preparing audio…"
+            : "Stopped"}
       </AppText>
       <AppText variant="body" className="text-muted">
         Answers can be wrong, especially in low light or when the photo is

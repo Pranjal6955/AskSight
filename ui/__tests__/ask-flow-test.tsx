@@ -14,6 +14,15 @@ import { Providers } from "../test-utils";
 const mockStopRecording = jest.fn();
 let mockRecordingActive = true;
 
+jest.mock("../src/lib/useSpeech", () => ({
+  useSpeech: () => ({
+    play: jest.fn(),
+    stop: jest.fn(),
+    isPlaying: false,
+    didJustFinish: false,
+  }),
+}));
+
 jest.mock("../src/lib/useRecorder", () => ({
   useRecorder: () => ({
     permissionGranted: true,
@@ -88,7 +97,11 @@ describe("ask flow", () => {
 
     fireEvent.press(screen.getByRole("button", { name: "Ask This Question" }));
     await waitFor(() => expect(router.getPathname()).toBe("/answer"));
-    expect(ask).toHaveBeenCalledWith("image-1", "What does the label say?");
+    expect(ask).toHaveBeenCalledWith(
+      "image-1",
+      "What does the label say?",
+      expect.any(AbortSignal),
+    );
     expect(screen.getByText("It says rice.")).toBeOnTheScreen();
   });
 
@@ -133,7 +146,11 @@ describe("ask flow", () => {
     fireEvent.press(screen.getByRole("button", { name: "Ask" }));
 
     await waitFor(() => expect(router.getPathname()).toBe("/answer"));
-    expect(ask).toHaveBeenCalledWith("image-2", "What is in the photo?");
+    expect(ask).toHaveBeenCalledWith(
+      "image-2",
+      "What is in the photo?",
+      expect.any(AbortSignal),
+    );
   });
 
   test("shows ask failures and leaves the transcript available for retry", async () => {
@@ -155,9 +172,43 @@ describe("ask flow", () => {
         "The model is unavailable right now. Please try again later.",
       ),
     ).toBeOnTheScreen();
-    expect(ask).toHaveBeenCalledWith("image-3", "Read this");
+    expect(ask).toHaveBeenCalledWith(
+      "image-3",
+      "Read this",
+      expect.any(AbortSignal),
+    );
     expect(screen.getByLabelText("Edit your question")).toHaveDisplayValue(
       "Read this",
+    );
+  });
+
+  test("cancels the pending ask without showing a failed-answer message", async () => {
+    mockRecordingActive = false;
+    let signal: AbortSignal | undefined;
+    jest
+      .spyOn(api, "ask")
+      .mockImplementation((_imageId, _question, requestSignal) => {
+        signal = requestSignal;
+        return new Promise((_resolve, reject) => {
+          requestSignal?.addEventListener("abort", () => {
+            reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+          });
+        });
+      });
+    await renderFlow("/ask?image_id=image-4");
+    fireEvent.changeText(
+      screen.getByLabelText("Your question"),
+      "What is this?",
+    );
+    fireEvent.press(screen.getByRole("button", { name: "Ask" }));
+
+    expect(await screen.findByText("Looking at your photo…")).toBeOnTheScreen();
+    fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    expect(screen.queryByText(/couldn't answer/i)).not.toBeOnTheScreen();
+    expect(screen.getByLabelText("Your question")).toHaveDisplayValue(
+      "What is this?",
     );
   });
 });

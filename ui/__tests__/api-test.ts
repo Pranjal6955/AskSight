@@ -568,6 +568,29 @@ describe("Q&A and speech requests", () => {
     });
   });
 
+  test("passes cancellation to /ask and retains an answer in a history failure", async () => {
+    const controller = new AbortController();
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonBody(500, {
+        detail: "The answer could not be saved to history.",
+        answer: "A red car.",
+        model_version: "mock-0.0.0",
+      }),
+    );
+
+    await expect(
+      ask("img-1", "What is this?", controller.signal),
+    ).rejects.toMatchObject({
+      status: 500,
+      message: "The answer could not be saved to history.",
+      payload: {
+        answer: "A red car.",
+        model_version: "mock-0.0.0",
+      },
+    });
+    expect(fetchSpy.mock.calls[0][1]?.signal).toBe(controller.signal);
+  });
+
   test("transcribes multipart audio without setting content type manually", async () => {
     const fetchSpy = jest
       .spyOn(globalThis, "fetch")
