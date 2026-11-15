@@ -53,8 +53,11 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
         service = get_inference_service()
     except RuntimeError as exc:
         # Model backend misconfigured or unloadable — infrastructure, not input.
+        # Log the technical cause; the caller gets the contract sentence.
+        logger.error("inference_unavailable request_id=%s error=%s", get_request_id(), exc)
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=MODEL_UNAVAILABLE,
         ) from exc
 
     try:

@@ -161,12 +161,18 @@ class TestAsk(AskApiTestCase):
         )
 
     def test_model_unavailable_is_503(self):
-        with patch.object(
-            ask_module, "get_inference_service", side_effect=RuntimeError("checkpoint missing")
+        with (
+            patch.object(
+                ask_module,
+                "get_inference_service",
+                side_effect=RuntimeError("checkpoint missing"),
+            ),
+            self.assertLogs("asksight.api", level="ERROR") as logs,
         ):
             res = self.ask(self.upload())
         self.assertEqual(res.status_code, 503)
-        self.assertEqual(res.json()["detail"], "checkpoint missing")
+        self.assertEqual(res.json()["detail"], ask_module.MODEL_UNAVAILABLE)
+        self.assertIn("checkpoint missing", "\n".join(logs.output))
 
     def test_slow_model_is_504(self):
         self.service.delay = 0.2
