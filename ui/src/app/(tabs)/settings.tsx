@@ -1,16 +1,25 @@
+import { useState } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/AppText";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { StatusBanner } from "@/components/StatusBanner";
 import { announce } from "@/lib/a11y";
+import { deleteAllHistory, toFriendlyMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { clearCachedHistory } from "@/lib/historyCache";
 import { useSettings, type TextScale } from "@/lib/settings";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const { settings, update } = useSettings();
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingHistory, setDeletingHistory] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
   const initials = user?.name
     .trim()
     .split(/\s+/)
@@ -22,6 +31,28 @@ export default function SettingsScreen() {
   function handleSignOut() {
     signOut();
     router.replace("/login");
+  }
+
+  async function handleDeleteAllHistory() {
+    setConfirmDeleteAll(false);
+    setDeleteError("");
+    setDeleteSuccess(false);
+    setDeletingHistory(true);
+    try {
+      await deleteAllHistory();
+      clearCachedHistory();
+      setDeleteSuccess(true);
+      announce("All questions, answers, and photos deleted.");
+    } catch (cause) {
+      const message = toFriendlyMessage(
+        cause,
+        "We couldn't delete your history. Please try again.",
+      );
+      setDeleteError(message);
+      announce(message);
+    } finally {
+      setDeletingHistory(false);
+    }
   }
 
   return (
@@ -149,6 +180,42 @@ export default function SettingsScreen() {
             className="mb-3 mt-10 text-2xl font-bold text-ink"
             accessibilityRole="header"
           >
+            Privacy &amp; data
+          </Text>
+          <View className="gap-4 rounded-card border-2 border-inputBorder bg-white p-5">
+            <AppText variant="bodyLarge" className="text-ink">
+              Photos and questions are stored until you delete them. Speech is
+              not stored.
+            </AppText>
+            {deleteError ? (
+              <StatusBanner tone="error" message={deleteError} />
+            ) : null}
+            {deleteSuccess ? (
+              <StatusBanner
+                tone="success"
+                message="All questions, answers, and photos deleted."
+              />
+            ) : null}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{
+                disabled: deletingHistory,
+                busy: deletingHistory,
+              }}
+              disabled={deletingHistory}
+              onPress={() => setConfirmDeleteAll(true)}
+              className="min-h-14 items-center justify-center rounded-field border-2 border-error px-5 py-3"
+            >
+              <AppText variant="bodyLarge" className="font-bold text-error">
+                {deletingHistory ? "Deleting history…" : "Delete All History"}
+              </AppText>
+            </Pressable>
+          </View>
+
+          <Text
+            className="mb-3 mt-10 text-2xl font-bold text-ink"
+            accessibilityRole="header"
+          >
             About AskSight
           </Text>
           <View className="flex-row items-start gap-4 rounded-card border-2 border-inputBorder bg-white p-5">
@@ -165,6 +232,16 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+      <ConfirmDialog
+        visible={confirmDeleteAll}
+        title="Delete all history?"
+        message="This deletes every question, answer, and photo in your history. It cannot be undone."
+        confirmLabel="Delete All"
+        cancelLabel="Keep My History"
+        destructive
+        onConfirm={() => void handleDeleteAllHistory()}
+        onCancel={() => setConfirmDeleteAll(false)}
+      />
     </SafeAreaView>
   );
 }

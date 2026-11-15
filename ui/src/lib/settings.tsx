@@ -38,11 +38,13 @@ const TEXT_SCALE: Record<TextScale, number> = {
 
 type SettingsValue = {
   settings: Settings;
+  ready: boolean;
   update: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
 };
 
 const SettingsContext = createContext<SettingsValue>({
   settings: DEFAULT_SETTINGS,
+  ready: false,
   update: () => {},
 });
 
@@ -82,6 +84,7 @@ function sanitize(value: unknown): Settings {
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -93,6 +96,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (active && parsed) setSettings(sanitize(parsed));
       } catch {
         // Unreadable storage or corrupt JSON: keep defaults.
+      } finally {
+        if (active) setReady(true);
       }
     })();
 
@@ -115,7 +120,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SettingsContext.Provider value={{ settings, update }}>
+    <SettingsContext.Provider value={{ settings, ready, update }}>
       {children}
     </SettingsContext.Provider>
   );

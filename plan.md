@@ -4,8 +4,8 @@
 **Scope:** the Expo mobile app in `ui/`, from today's auth-only shell to the full
 low-vision journey.
 **Status:** Phase 0 foundations, Phase 1 capture/upload, Phase 2 ask flow, and
-Phase 3 answer/playback are implemented. Device accessibility verification
-remains open; Phase 4 and later journey phases are planned.
+Phases 3 and 4 are implemented. Device accessibility verification remains open;
+Phases 5 and 6 are planned.
 
 The order below is deliberate: foundations first so every later screen is born
 accessible, then capture → ask → answer (the demo path), then history and
@@ -21,7 +21,7 @@ settings, then device verification and release.
 | Home, camera, library picker, photo preview and upload | Voice capture, STT, TTS, ask submission, history screens |
 | API client for auth, images, ask, speech and history; accessibility toolkit and settings store | Playback, history UI and full accessibility settings |
 | Design tokens and shared accessible components | About/release configuration |
-| 180 passing UI tests; lint and typecheck clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
+| 192 passing UI tests; lint and typecheck clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
 | — | Core-journey end-to-end test and device accessibility pass |
 
 Ground rules for every task:
@@ -136,7 +136,7 @@ Story-style render in the existing test setup (no Storybook dependency).
 
 - [x] Shared test helpers for a signed-in `AuthProvider`, a fake API, and
   accessibility queries (`getByRole`, `getByLabelText`).
-- [x] Confirm all 180 UI tests pass; lint and typecheck are clean.
+- [x] Confirm all 192 UI tests pass; lint and typecheck are clean.
 
 ---
 
@@ -226,7 +226,7 @@ playback are disabled.
 **Done:** recorded questions become editable text, can be confirmed and sent;
 typed questions work if voice is unavailable; tests cover record → transcribe →
 confirm, transcription failure with typed fallback, and Ask failure with retry.
-Automated checks: 180 UI tests pass; lint and typecheck pass. Physical
+Automated checks: 192 UI tests pass; lint and typecheck pass. Physical
 TalkBack/VoiceOver verification remains part of Phase 6.
 
 ---
@@ -285,21 +285,43 @@ VoiceOver/TalkBack review remains part of Phase 6.
 
 ## 6. Phase 4 — History, deletion, consent (C4)
 
-- [ ] `src/app/consent.tsx`: one-time screen after first sign-in (design.md
+### Intended flow
+
+After sign-in, users without `consentGiven` are routed to a consent screen and
+cannot open Home, capture, library, or Ask until they accept. Consent explains
+stored photos/questions/answers, unsaved generated speech, and audio/answer text
+sent to the speech provider; Read More expands the details. History loads the
+first cursor page, caches it in memory for offline return, and lets the user
+refresh or explicitly load more. A row opens a full detail view; available
+photos can be used to ask again. Delete-one confirms that the photo is removed
+when it was the last question about it; delete-all confirms that questions,
+answers, and photos are removed. Both deletions update the in-memory cache only
+after the server succeeds.
+
+- [x] `src/app/consent.tsx`: one-time screen after first sign-in (design.md
   §7.12); sets `consentGiven`; cannot be skipped into the camera flow.
-- [ ] `src/app/(tabs)/history.tsx`: load `GET /history`, rows via `HistoryRow`,
+- [x] `src/app/(tabs)/history.tsx`: load `GET /history`, rows via `HistoryRow`,
   explicit "Load More", empty/loading/offline/error states, visible Refresh.
-- [ ] `src/app/history/[id].tsx`: full question/answer/photo/date/model version,
+- [x] `src/app/history/[id].tsx`: full question/answer/photo/date/model version,
   playback controls, "Ask About This Photo Again" when `GET /images/{id}` works.
-- [ ] Delete one entry with confirmation naming cascade behavior; delete all in
+- [x] Delete one entry with confirmation naming cascade behavior; delete all in
   Settings with confirmation naming history + photos; announce success.
-- [ ] 404 image gone → hide retry affordances and show the backend sentence.
-- [ ] Cache the last history page in memory only; do not add offline storage in
+- [x] 404 image gone → hide retry affordances and show the backend sentence.
+- [x] Cache the last history page in memory only; do not add offline storage in
   this phase.
 
-**Done when:** paging, delete-one, delete-all, and "image gone" are tested;
+**Done:** paging, delete-one, delete-all, and "image gone" are tested;
 deleting never leaves a visible row after success; TalkBack/VoiceOver reads
-each row as one sentence.
+each row as one sentence. UI checks: 192 tests pass; lint and typecheck pass.
+Physical screen-reader verification remains in Phase 6.
+
+**Research note:** `/history` defaults to 20 items, accepts a cursor and has
+`has_more`; `GET /history/{id}` returns the full exchange. Deleting the last
+entry for an image cascades to that photo; `DELETE /history` removes all owned
+history and photo bytes. All these routes are authenticated and return plain
+English `detail` errors. Expo Router SDK 57 `Stack.Protected` redirects denied
+routes through the app's anchor (`index`); the anchor must choose `/consent`
+when signed in without consent, otherwise it chooses Home.
 
 ---
 

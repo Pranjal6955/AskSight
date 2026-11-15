@@ -12,6 +12,7 @@ import HomeScreen from "../src/app/(tabs)/home";
 import SettingsScreen from "../src/app/(tabs)/settings";
 import { AuthProvider } from "../src/lib/auth";
 import { SignedInProviders } from "../test-utils";
+import * as api from "../src/lib/api";
 
 const USER = {
   id: "1",
@@ -158,6 +159,16 @@ describe("Home screen", () => {
 });
 
 describe("History screen", () => {
+  beforeEach(() => {
+    jest.spyOn(api, "listHistory").mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      has_more: false,
+    });
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
   test("shows the History heading", async () => {
     await renderTabs();
     await fireEvent.press(screen.getByText("History"));
@@ -177,16 +188,6 @@ describe("History screen", () => {
     await fireEvent.press(screen.getByText("History"));
     expect(
       await screen.findByText("Your past questions will appear here."),
-    ).toBeOnTheScreen();
-  });
-
-  test("shows the coming soon note", async () => {
-    await renderTabs();
-    await fireEvent.press(screen.getByText("History"));
-    expect(
-      await screen.findByText(
-        "Your question history will be available when saved sessions are supported.",
-      ),
     ).toBeOnTheScreen();
   });
 
