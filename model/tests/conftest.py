@@ -164,4 +164,7 @@ def tiny_records(tmp_path) -> tuple:
     test = [record(2, "how many flowers", "two"), record(3, "what color is the cat", "brown")]
     for name, records in (("train", train), ("val", val), ("test", test)):
         (data_dir / f"{name}.jsonl").write_text("\n".join(json.dumps(r) for r in records) + "\n")
+    (data_dir / "meta.json").write_text(
+        json.dumps({"seed": 0, "actual": {"train": 2, "val": 1, "test": 2}})
+    )
     return data_dir, {"train": train, "val": val, "test": test}

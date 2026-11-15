@@ -13,6 +13,11 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # Test-only values: the suite signs tokens at import time, and Prisma
+      # resolves the datasource URL during generate. Never real credentials.
+      JWT: ci-only-signing-key-0123456789abcdef
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/ci
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

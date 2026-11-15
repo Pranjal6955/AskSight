@@ -11,21 +11,52 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import random
+import subprocess
 import time
 from dataclasses import asdict
+from datetime import UTC, datetime
+from importlib import metadata
 from pathlib import Path
 
 import torch
 from PIL import Image
 
 from .config import ModelConfig, TrainConfig, load_configs
-from .pipeline import AskSightModel, save_checkpoint
+from .pipeline import AskSightModel, save_checkpoint, write_manifest
 
 
 def load_jsonl(path: Path) -> list[dict]:
     with open(path) as handle:
         return [json.loads(line) for line in handle if line.strip()]
+
+
+def _code_revision() -> dict:
+    """Best-effort git revision plus dirty flag; not fatal outside a source checkout."""
+    repo = Path(__file__).resolve().parents[2]
+    try:
+        revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        dirty = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"], cwd=repo, text=True, stderr=subprocess.DEVNULL
+            ).strip()
+        )
+        return {"revision": revision or None, "dirty": dirty}
+    except (OSError, subprocess.CalledProcessError):
+        return {"revision": None, "dirty": None}
+
+
+def _dependency_versions() -> dict[str, str | None]:
+    versions: dict[str, str | None] = {"python": platform.python_version()}
+    for package in ("torch", "transformers", "pillow", "safetensors", "pyyaml"):
+        try:
+            versions[package] = metadata.version(package)
+        except metadata.PackageNotFoundError:
+            versions[package] = None
+    return versions
 
 
 def _load_batch(records: list[dict], data_dir: Path) -> tuple[list, list[str], list[str]] | None:
@@ -62,6 +93,7 @@ def _val_loss(model: AskSightModel, records: list[dict], data_dir: Path, batch_s
 
 
 def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
+    started_at = datetime.now(UTC).isoformat()
     data_dir = Path(train_config.data_dir)
     records = load_jsonl(data_dir / "train.jsonl")
     val_records = load_jsonl(data_dir / "val.jsonl")
@@ -112,16 +144,27 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
     model_config.version = train_config.version
     checkpoint_dir = Path(train_config.out_dir) / train_config.version
     save_checkpoint(checkpoint_dir, model)
-    data_meta = data_dir / "meta.json"
-    if data_meta.exists():
-        (checkpoint_dir / "data_meta.json").write_text(data_meta.read_text())
+    data_meta_path = data_dir / "meta.json"
+    data_meta = None
+    if data_meta_path.exists():
+        data_meta = json.loads(data_meta_path.read_text())
+        (checkpoint_dir / "data_meta.json").write_text(data_meta_path.read_text())
+    else:  # do not leave a previous run's provenance in an overwritten checkpoint
+        (checkpoint_dir / "data_meta.json").unlink(missing_ok=True)
+    write_manifest(checkpoint_dir)  # include the copied split provenance
 
     metrics = {
         "version": train_config.version,
         "seed": train_config.seed,
+        "started_at": started_at,
+        "finished_at": datetime.now(UTC).isoformat(),
         "device": str(model.device),
         "dtype": str(model.dtype),
         "gpu": torch.cuda.get_device_name(0) if model.device.type == "cuda" else None,
+        "python": platform.python_version(),
+        "code": _code_revision(),
+        "dependencies": _dependency_versions(),
+        "data_meta": data_meta,
         "epochs": history,
         "model_config": model_config.to_dict(),
         "train_config": asdict(train_config),

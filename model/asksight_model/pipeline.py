@@ -8,11 +8,14 @@ tokens. Only the connector is trained (B2/B4).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 import torch
 import torch.nn as nn
 from PIL import Image
+from safetensors import SafetensorError
 from safetensors.torch import load_file, save_file
 from transformers import (
     AutoModelForCausalLM,
@@ -21,11 +24,16 @@ from transformers import (
     CLIPVisionModel,
 )
 
-from .config import ModelConfig
+from .config import ModelConfig, validate_model_config
 
 IMAGE_SENTINEL = "<|asksight_image|>"
 PROJECTOR_FILE = "projector.safetensors"
 CONFIG_FILE = "config.yaml"
+MANIFEST_FILE = "manifest.json"
+MANIFEST_FORMAT = 1
+# Immutable artifacts hashed by the manifest. metrics.json changes during
+# evaluation, so it is deliberately excluded.
+MANIFESTED_FILES = (PROJECTOR_FILE, CONFIG_FILE, "data_meta.json")
 
 _DTYPES = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}
 
@@ -67,6 +75,7 @@ class Connector(nn.Module):
 class AskSightModel(nn.Module):
     def __init__(self, config: ModelConfig, device: str = "auto", dtype: str = "auto") -> None:
         super().__init__()
+        validate_model_config(config)
         self.config = config
         self.device = resolve_device(device)
         self.dtype = resolve_dtype(dtype, self.device)
@@ -250,6 +259,73 @@ class AskSightModel(nn.Module):
         ]
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def write_manifest(path: Path) -> dict:
+    """Hash the immutable checkpoint artifacts so downloads can be verified."""
+    path = Path(path)
+    for name in (PROJECTOR_FILE, CONFIG_FILE):
+        if not (path / name).is_file():
+            raise FileNotFoundError(f"checkpoint at {path} is missing {name}")
+    files = {}
+    for name in MANIFESTED_FILES:
+        target = path / name
+        if target.is_file():
+            files[name] = {"sha256": _sha256_file(target), "bytes": target.stat().st_size}
+    manifest = {"format_version": MANIFEST_FORMAT, "files": files}
+    (path / MANIFEST_FILE).write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest
+
+
+def verify_checkpoint(path: Path, require_manifest: bool = False) -> dict:
+    """Check required artifacts and, when present, every hash in the manifest.
+
+    Older checkpoints without a manifest still load unless `require_manifest`
+    is set; release checkpoints should always include one.
+    """
+    path = Path(path)
+    for name in (PROJECTOR_FILE, CONFIG_FILE):
+        if not (path / name).is_file():
+            raise FileNotFoundError(f"checkpoint at {path} is missing {name}")
+    manifest_path = path / MANIFEST_FILE
+    if not manifest_path.is_file():
+        if require_manifest:
+            raise FileNotFoundError(
+                f"checkpoint at {path} has no {MANIFEST_FILE}; retrain it or add a manifest"
+            )
+        return {"format_version": None, "files": {}}
+    try:
+        manifest = json.loads(manifest_path.read_text())
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest must be a JSON object")
+        if manifest.get("format_version") != MANIFEST_FORMAT:
+            raise ValueError(f"unsupported manifest format {manifest.get('format_version')!r}")
+        files = manifest["files"]
+        if not isinstance(files, dict):
+            raise ValueError("manifest files must be an object")
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ValueError(f"invalid checkpoint manifest at {manifest_path}: {exc}") from exc
+
+    for name, entry in files.items():
+        # Untrusted manifest: never follow paths outside the checkpoint directory.
+        if Path(name).name != name or name in ("", ".", ".."):
+            raise ValueError(f"manifest contains an unsafe file name: {name!r}")
+        if not isinstance(entry, dict) or not isinstance(entry.get("sha256"), str):
+            raise ValueError(f"manifest entry for {name!r} has no sha256")
+        target = path / name
+        if not target.is_file():
+            raise FileNotFoundError(f"checkpoint at {path} is missing manifested file {name}")
+        if _sha256_file(target) != entry["sha256"]:
+            raise ValueError(f"checkpoint artifact {name} does not match its manifest hash")
+    return manifest
+
+
 def save_checkpoint(path: Path, model: AskSightModel) -> None:
     """Save connector weights plus config. Frozen backbones are re-fetched by pin."""
     path = Path(path)
@@ -257,10 +333,19 @@ def save_checkpoint(path: Path, model: AskSightModel) -> None:
     state = {k: v.contiguous().cpu() for k, v in model.connector.state_dict().items()}
     save_file(state, str(path / PROJECTOR_FILE))
     model.config.save(path / CONFIG_FILE)
+    write_manifest(path)
 
 
 def load_projector(path: Path, model: AskSightModel) -> AskSightModel:
-    state = load_file(str(Path(path) / PROJECTOR_FILE))
-    model.connector.load_state_dict(state)
+    try:
+        state = load_file(str(Path(path) / PROJECTOR_FILE))
+    except SafetensorError as exc:
+        raise ValueError(f"invalid {PROJECTOR_FILE} in {path}: {exc}") from exc
+    try:
+        model.connector.load_state_dict(state)
+    except RuntimeError as exc:
+        raise ValueError(
+            f"{PROJECTOR_FILE} in {path} does not match the checkpoint config: {exc}"
+        ) from exc
     model.connector.to(model.device)
     return model

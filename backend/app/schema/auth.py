@@ -21,3 +21,23 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     createdAt: datetime
+
+
+class TokenResponse(BaseModel):
+    """Returned by login and refresh.
+
+    The mobile app persists `refresh_token` in secure storage and posts it to
+    `/auth/refresh` when the 30-minute access token expires.
+    """
+
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str

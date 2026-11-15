@@ -3,7 +3,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 
-from app.core.security import ALGORITHM, SECRET_KEY
+from app.core.security import ALGORITHM, REFRESH_TOKEN_TYPE, SECRET_KEY
 from app.db import db
 
 bearer_schema = HTTPBearer()
@@ -14,6 +14,10 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(b
 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") == REFRESH_TOKEN_TYPE:
+            # A refresh token must never work as an access token: it lives 30
+            # days instead of 30 minutes.
+            raise HTTPException(status_code=401, detail="Invalid token")
         user_id = payload.get("sub")
 
         if not user_id:
