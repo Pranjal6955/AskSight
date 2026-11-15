@@ -18,6 +18,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { toFriendlyMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useKeyboardAwareScroll } from "@/lib/useKeyboardAwareScroll";
+import { getPendingPhoto } from "@/lib/pendingPhoto";
 
 export default function LoginScreen() {
   const { signIn, sessionNotice } = useAuth();
@@ -52,10 +53,21 @@ export default function LoginScreen() {
       // again while the redirect is pending. The timer is cleared on unmount,
       // so navigating away during the hold cancels the redirect instead of
       // hijacking whatever screen the user moved to.
-      redirectTimer.current = setTimeout(
-        () => router.replace("/(tabs)/home"),
-        600,
-      );
+      redirectTimer.current = setTimeout(() => {
+        const pendingPhoto = getPendingPhoto();
+        router.replace(
+          pendingPhoto
+            ? ({
+                pathname: "/photo-preview",
+                params: {
+                  uri: pendingPhoto.uri,
+                  name: pendingPhoto.name,
+                  type: pendingPhoto.type,
+                },
+              } as never)
+            : "/(tabs)/home",
+        );
+      }, 600);
     } catch (cause) {
       if (!mounted.current) return;
       setError(

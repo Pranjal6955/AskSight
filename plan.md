@@ -3,7 +3,9 @@
 **Companion to:** [design.md](design.md) (the spec — read that first)
 **Scope:** the Expo mobile app in `ui/`, from today's auth-only shell to the full
 low-vision journey.
-**Status:** plan only; no core-journey code exists yet.
+**Status:** Phase 0 foundations and Phase 1 capture/upload implementation are
+complete. Phase 1 device accessibility verification remains open; Phase 2 and
+later journey phases are planned.
 
 The order below is deliberate: foundations first so every later screen is born
 accessible, then capture → ask → answer (the demo path), then history and
@@ -15,12 +17,12 @@ settings, then device verification and release.
 
 | Built and working | Missing |
 |---|---|
-| Sign-in / sign-up screens with WCAG 2.2 AA treatment | Session persistence (refresh token), route guard |
-| Home, History (empty), Settings shell, floating tab bar | Camera, photo library, upload |
-| API error mapper (`toFriendlyMessage`, `readError`) | STT, TTS, ask, image, history calls |
-| Design tokens in `ui/tailwind.config.js` | Answer screen, playback, transcript review |
-| 93 passing tests, lint + typecheck clean | Consent, delete flows, accessibility settings |
-| — | Core-journey component/E2E tests, TalkBack/VoiceOver pass, release config |
+| Sign-in / sign-up, refresh-token restore, session expiry handling, protected routes | First-run consent |
+| Home, camera, library picker, photo preview and upload | Voice capture, STT, TTS, ask submission, history screens |
+| API client for auth, images, ask, speech and history; accessibility toolkit and settings store | Playback, history UI and full accessibility settings |
+| Design tokens and shared accessible components | About/release configuration |
+| 177 passing UI tests; lint and typecheck clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
+| — | Core-journey end-to-end test and device accessibility pass |
 
 Ground rules for every task:
 
@@ -54,108 +56,127 @@ time after Phase 0 because it only needs the settings store.
 
 ### 2.1 Expand the API client (`src/lib/api.ts`)
 
-- [ ] Add types and functions: `TokenResponse` (access + refresh), `refresh`,
+- [x] Add types and functions: `TokenResponse` (access + refresh), `refresh`,
   `logout`, `uploadImage(file)`, `getImage(id)`, `ask(imageId, question)`,
   `transcribe(file)`, `synthesize(text, language, voice)`,
   `listHistory(cursor?)`, `getHistoryEntry(id)`, `deleteHistoryEntry(id)`,
   `deleteAllHistory()`, `deleteImage(id)`.
-- [ ] Keep the one `request` helper for JSON, plus separate helpers for
+- [x] Keep the one `request` helper for JSON, plus separate helpers for
   multipart (`FormData` with `{ uri, name, type }`) and binary responses.
-- [ ] Attach `X-Request-ID` from the response to thrown errors for support.
-- [ ] Map the new statuses (413, 415, 429, 502, 503, 504) to the copy in
+- [x] Attach `X-Request-ID` from the response to thrown errors for support.
+- [x] Map the new statuses (413, 415, 429, 502, 503, 504) to the copy in
   design.md §9, while still preferring the backend sentence.
 
 **Done when:** unit tests cover every function's URL, method, headers, and
-error mapping; no new `any`.
+error mapping; no new `any`. *(Verified.)*
 
 ### 2.2 Session persistence (`src/lib/session.ts`, `src/lib/auth.tsx`)
 
-- [ ] Install `expo-secure-store`; store only the **refresh token** there. Keep
+- [x] Install `expo-secure-store`; store only the **refresh token** there. Keep
   the access token in memory.
-- [ ] On cold start: read the refresh token → `POST /auth/refresh` → `GET /auth/me`.
+- [x] On cold start: read the refresh token → `POST /auth/refresh` → `GET /auth/me`.
   Persist the rotated refresh token, discard the old one.
-- [ ] On any 401: refresh once, retry the request once, then sign out with the
+- [x] On any 401: refresh once, retry the request once, then sign out with the
   "Your session has expired" message.
-- [ ] Sign out: call `POST /auth/logout`, delete the stored token even if the
+- [x] Sign out: call `POST /auth/logout`, delete the stored token even if the
   call fails, clear state.
-- [ ] Guard routes with `Stack.Protected` (SDK 57). `redirectTo` is SDK 58+ —
+- [x] Guard routes with `Stack.Protected` (SDK 57). `redirectTo` is SDK 58+ —
   use the anchor route; keep `app/index.tsx` redirecting to `/login` when
   signed out.
-- [ ] Add an `authReady` loading state so the app does not flash the login
+- [x] Add an `authReady` loading state so the app does not flash the login
   screen while restoring.
 
 **Done when:** a killed-and-reopened app lands on Home when the refresh token is
 valid; an expired/revoked token lands on Login; tests cover refresh-once,
-rotate, and sign-out.
+rotate, and sign-out. *(Verified.)*
 
 ### 2.3 Settings store (`src/lib/settings.tsx`)
 
-- [ ] Context + persistence for: `speakAutomatically` (default on),
+- [x] Context + persistence for: `speakAutomatically` (default on),
   `speechRate` (`0.8 | 1 | 1.2`), `textScale` (`system | large | xlarge`),
   `speechLanguage` (default `en-IN`), `consentGiven`.
-- [ ] Persist as JSON in `expo-secure-store` (already installed for tokens; the
+- [x] Persist as JSON in `expo-secure-store` (already installed for tokens; the
   payload is tiny) so no second storage dependency is added.
-- [ ] Provide a `useSettings()` hook and a text-scale helper that multiplies the
-  app's type sizes without overriding the OS scale.
+- [x] Provide a `useSettings()` hook and a text-scale helper that multiplies the
+app's type sizes without overriding the OS scale. The Settings screen has a
+live sample and announces text-size changes.
 
 **Done when:** values survive restart; changing text scale updates a preview
-immediately and is announced.
+immediately and is announced. *(Verified.)*
 
 ### 2.4 Accessibility toolkit (`src/lib/a11y.ts`, `src/lib/useA11y.ts`)
 
-- [ ] `announce(message, assertive?)` wrapper around
+- [x] `announce(message, assertive?)` wrapper around
   `AccessibilityInfo.announceForAccessibility`.
-- [ ] `useScreenReader()` from `AccessibilityInfo.isScreenReaderEnabled()` with
+- [x] `useScreenReader()` from `AccessibilityInfo.isScreenReaderEnabled()` with
   a subscription, used to default auto-speak off.
-- [ ] `useReduceMotion()` and `useHighContrast()` (platform-supported only).
-- [ ] A small `describeDate(iso)` helper for spoken dates ("Today at 2:15 PM").
-- [ ] Focus helpers: a ref-based `setAccessibilityFocus` for moving focus to the
+- [x] `useReduceMotion()` and `useHighContrast()` (platform-supported only).
+- [x] A small `describeDate(iso)` helper for spoken dates ("Today at 2:15 PM").
+- [x] Focus helpers: a ref-based `setAccessibilityFocus` for moving focus to the
   answer/primary action after a transition.
 
 ### 2.5 Shared components (`src/components/`)
 
-- [ ] `ScreenHeader` — title as header, labelled back button.
-- [ ] `ActionCard` — the Home "Take a Photo" pattern as a reusable one-button card.
-- [ ] `StatusBanner` — info/success/warning/error, icon + text, no auto-dismiss;
+- [x] `ScreenHeader` — title as header, labelled back button.
+- [x] `ActionCard` — the Home "Take a Photo" pattern as a reusable one-button card.
+- [x] `StatusBanner` — info/success/warning/error, icon + text, no auto-dismiss;
   `accessibilityRole="alert"` for errors.
-- [ ] `MicButton` — idle/listening/processing, 120–140 dp, tap-to-toggle,
+- [x] `MicButton` — idle/listening/processing, 120–140 dp, tap-to-toggle,
   `accessibilityState.selected`, label swaps.
-- [ ] `AnswerBlock` — answer text at 30–34 px, playback row, verify note.
-- [ ] `HistoryRow` — combined label, 96 dp, question + 2-line answer + date.
-- [ ] `ConfirmDialog` — names the consequence; destructive action not default.
-- [ ] `ProgressAnnouncer` — announce start, 8 s "still working", finish.
+- [x] `AnswerBlock` — answer text at answer size, playback row, verify note.
+- [x] `HistoryRow` — combined label, 96 dp, question + 2-line answer + date.
+- [x] `ConfirmDialog` — names the consequence; destructive action not default.
+- [x] `ProgressAnnouncer` — announce start, 8 s "still working", finish.
 
 **Done when:** each component has a test for its accessible label/state and a
 Story-style render in the existing test setup (no Storybook dependency).
+*(Verified.)*
 
 ### 2.6 Test harness
 
-- [ ] Shared test helpers for a signed-in `AuthProvider`, a fake API, and
+- [x] Shared test helpers for a signed-in `AuthProvider`, a fake API, and
   accessibility queries (`getByRole`, `getByLabelText`).
-- [ ] Confirm the existing 93 tests still pass; fix no unrelated warnings.
+- [x] Confirm all 177 UI tests pass; lint and typecheck are clean.
 
 ---
 
 ## 3. Phase 1 — Capture and upload (C1)
 
-- [ ] `npx expo install expo-camera expo-image-picker expo-haptics`.
-- [ ] Add camera and photo-library permission copy to `app.json` config plugins
+- [x] `npx expo install expo-camera expo-image-picker expo-haptics` (SDK 57
+  compatible versions).
+- [x] Add camera and photo-library permission copy to `app.json` config plugins
   (permission strings explain *why*, in plain language).
-- [ ] `src/app/capture.tsx` (modal): full preview, bottom control bar, torch,
+- [x] `src/app/capture.tsx` (modal): full preview, bottom control bar, torch,
   whole-preview tap to capture, Close.
   - `CameraView` + `useCameraPermissions`; `takePictureAsync` with quality
     ~0.8 and a sane size.
   - Spoken guidance on entry only; announce torch and shutter.
-- [ ] `src/app/photo-preview.tsx`: image, "Use Photo", "Retake", "Choose
+- [x] `src/app/photo-preview.tsx`: image, "Use Photo", "Retake", "Choose
   Another", upload progress on the primary button, spoken milestones after 3 s.
-- [ ] Library path: `ImagePicker.requestMediaLibraryPermissionsAsync` then
+- [x] Library path: `ImagePicker.requestMediaLibraryPermissionsAsync` then
   `launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 })`.
-- [ ] Wire Home's primary card and "Choose from Library" to the flows.
-- [ ] Upload via `POST /images`; keep the returned `image_id` in navigation
-  params. Handle 413/415/422/401/offline with design.md §7.4 copy.
-- [ ] Denied permission: pre-permission explanation, then OS prompt; on denial
+- [x] Wire Home's primary card and "Choose from Library" to the flows.
+- [x] Upload via `POST /images`; keep the returned `image_id` in navigation
+  params. Backend error details and offline errors reach the preview banner.
+- [x] Preserve the selected photo across a 401 re-authentication flow where
+  possible (kept in memory only and restored after sign-in).
+- [x] Denied camera permission: pre-permission explanation, then OS prompt; on denial
   show how to enable it and offer the library path.
-- [ ] Guard double submission (disable while uploading; rate limit is 30/min).
+- [x] Guard double submission (disable while uploading; rate limit is 30/min).
+- [x] Add Phase 1 component tests for permission denial, upload failure, retry,
+  and oversized photos.
+- [ ] Verify camera and screen-reader flows on real iOS and Android devices,
+  including screen curtain.
+
+The current `src/app/ask.tsx` is a handoff placeholder that receives `image_id`;
+Phase 2 will replace it with the question-entry screen. Upload uses the existing
+fetch-based API helper, so it announces that upload is taking longer after 3 s
+but cannot report percentage progress yet.
+
+Automated coverage passes for camera permission denial, library selection,
+upload failure/retry, oversized uploads, and resuming the selected photo after
+sign-in. TalkBack/VoiceOver and screen-curtain verification still needs physical
+devices.
 
 **Done when:** a user can take a photo or pick one, see it, retry, and reach the
 Ask screen with an `image_id`; TalkBack/VoiceOver can complete it with the

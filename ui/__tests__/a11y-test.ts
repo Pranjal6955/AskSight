@@ -31,6 +31,20 @@ describe("announce", () => {
     expect(android).not.toHaveBeenCalled();
   });
 
+  test("supports an assertive announcement shorthand on iOS", () => {
+    jest.replaceProperty(Platform, "OS", "ios");
+    const ios = jest.spyOn(
+      AccessibilityInfo,
+      "announceForAccessibilityWithOptions",
+    );
+
+    announce("Permission needed", true);
+
+    expect(ios).toHaveBeenCalledWith("Permission needed", {
+      priority: "high",
+    });
+  });
+
   test("uses the plain API on Android", () => {
     jest.replaceProperty(Platform, "OS", "android");
     const ios = jest.spyOn(
@@ -110,6 +124,21 @@ describe("useScreenReader", () => {
 
     unmount();
     expect(remove).toHaveBeenCalled();
+  });
+
+  test("keeps the state unknown when the screen-reader query fails", async () => {
+    jest
+      .spyOn(AccessibilityInfo, "isScreenReaderEnabled")
+      .mockRejectedValue(new Error("unsupported"));
+    jest
+      .spyOn(AccessibilityInfo, "addEventListener")
+      .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<
+        typeof AccessibilityInfo.addEventListener
+      >);
+
+    const { result } = renderHook(() => useScreenReader());
+
+    await waitFor(() => expect(result.current).toBeNull());
   });
 });
 

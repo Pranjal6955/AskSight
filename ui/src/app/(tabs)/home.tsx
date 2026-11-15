@@ -1,8 +1,10 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { router } from "expo-router";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ActionCard } from "@/components/ActionCard";
+import { AppText } from "@/components/AppText";
 import { useAuth } from "@/lib/auth";
 
 export default function HomeScreen() {
@@ -31,72 +33,53 @@ export default function HomeScreen() {
                 className="h-14 w-14 items-center justify-center rounded-full bg-ink"
                 importantForAccessibility="no-hide-descendants"
               >
-                <MaterialCommunityIcons name="eye" size={34} color="#FAF7F0" />
+                <MaterialCommunityIcons name="eye" size={34} color="white" />
               </View>
-              <Text className="text-3xl font-bold tracking-tight text-ink">
+              <AppText variant="section" className="text-ink">
                 AskSight
-              </Text>
+              </AppText>
             </View>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Open settings"
               onPress={() => router.navigate("/(tabs)/settings")}
-              className="h-14 w-14 items-center justify-center rounded-full bg-[#F0ECE4]"
+              className="h-14 w-14 items-center justify-center rounded-full bg-field"
               hitSlop={8}
             >
-              <MaterialCommunityIcons name="cog" size={30} color="#111111" />
+              <MaterialCommunityIcons name="cog" size={30} color="#000000" />
             </Pressable>
           </View>
 
           <View className="mb-6">
-            <Text className="text-[23px] leading-8 text-[#292929]">Hello,</Text>
-            <Text
+            <AppText variant="bodyLarge" className="text-muted">
+              Hello,
+            </AppText>
+            <AppText
+              variant="hero"
               accessibilityRole="header"
-              className="text-[48px] font-bold leading-[54px] tracking-tight text-ink"
+              className="text-ink"
               numberOfLines={1}
               adjustsFontSizeToFit
             >
               {firstName}!
-            </Text>
-            <Text className="mt-3 max-w-[480px] text-[22px] leading-[30px] text-[#303030]">
+            </AppText>
+            <AppText
+              variant="bodyLarge"
+              className="mt-3 max-w-[480px] text-muted"
+            >
               Take a photo and let AskSight describe what you see.
-            </Text>
+            </AppText>
           </View>
 
-          <Pressable
-            accessibilityRole="button"
+          <ActionCard
+            title="Take a Photo"
+            description="Capture your surroundings and get an AI description."
+            icon="camera"
+            variant="hero"
             accessibilityLabel="Take a photo. Opens the camera."
             accessibilityHint="You can also choose a photo from your library."
             onPress={() => router.push("/capture" as never)}
-            className="min-h-[255px] overflow-hidden rounded-[30px] bg-ink px-6 py-7"
-          >
-            <View
-              className="absolute -bottom-10 -right-10 h-56 w-56 rounded-full border-[18px] border-[#171717]"
-              importantForAccessibility="no-hide-descendants"
-            />
-            <View
-              className="absolute -bottom-10 -right-10 h-44 w-44 rounded-full border-[14px] border-[#202020]"
-              importantForAccessibility="no-hide-descendants"
-            />
-            <View className="flex-1 items-center justify-center">
-              <View
-                className="mb-4 h-[82px] w-[104px] items-center justify-center rounded-[24px] bg-white"
-                importantForAccessibility="no-hide-descendants"
-              >
-                <MaterialCommunityIcons
-                  name="camera"
-                  size={55}
-                  color="#111111"
-                />
-              </View>
-              <Text className="text-center text-[30px] font-bold leading-9 text-white">
-                Take a Photo
-              </Text>
-              <Text className="mt-2 max-w-[330px] text-center text-[18px] leading-[25px] text-[#E1E1E1]">
-                Capture your surroundings and get an AI description.
-              </Text>
-            </View>
-          </Pressable>
+          />
 
           <Pressable
             accessibilityRole="button"
@@ -110,54 +93,65 @@ export default function HomeScreen() {
               color="#000000"
               importantForAccessibility="no-hide-descendants"
             />
-            <Text className="text-lg font-semibold text-ink">
+            <AppText variant="bodyLarge" className="font-semibold text-ink">
               Choose from Library
-            </Text>
+            </AppText>
           </Pressable>
 
           <View className="mt-7">
             <View className="flex-row items-center justify-between">
-              <Text
+              <AppText
+                variant="section"
                 accessibilityRole="header"
-                className="text-[25px] font-bold tracking-tight text-ink"
+                className="text-ink"
               >
                 Recent activity
-              </Text>
+              </AppText>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.navigate("/(tabs)/history")}
-                className="min-h-11 flex-row items-center gap-1 rounded-full border border-[#E6E0D7] px-4"
+                className="min-h-11 flex-row items-center gap-1 rounded-full border-2 border-inputBorder px-4"
               >
-                <Text className="text-base font-semibold text-ink">
+                <AppText variant="body" className="font-semibold text-ink">
                   See all
-                </Text>
+                </AppText>
                 <MaterialCommunityIcons
                   name="chevron-right"
                   size={23}
-                  color="#111111"
+                  color="#000000"
                   importantForAccessibility="no-hide-descendants"
                 />
               </Pressable>
             </View>
 
-            <View className="mt-3 min-h-[112px] flex-row items-center gap-4 rounded-[22px] bg-white/70 px-5 py-5">
+            <View className="mt-3 min-h-[112px] flex-row items-center gap-4 rounded-card bg-white px-5 py-5">
               <View
-                className="h-14 w-14 items-center justify-center rounded-full bg-[#F0ECE4]"
+                className="h-14 w-14 items-center justify-center rounded-full bg-field"
                 importantForAccessibility="no-hide-descendants"
               >
                 <MaterialCommunityIcons
                   name="history"
                   size={28}
-                  color="#111111"
+                  color="#000000"
                 />
               </View>
               <View className="flex-1">
-                <Text className="text-lg font-bold text-ink">
+                <AppText variant="bodyLarge" className="font-bold text-ink">
                   No questions yet
-                </Text>
-                <Text className="mt-1 text-base leading-6 text-[#666666]">
+                </AppText>
+                <AppText variant="body" className="mt-1 text-muted">
                   Your past questions will appear here.
-                </Text>
+                </AppText>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Ask your first question"
+                  onPress={() => router.push("/capture" as never)}
+                  className="mt-2 min-h-11 justify-center"
+                >
+                  <AppText variant="body" className="font-semibold text-ink">
+                    Ask your first question
+                  </AppText>
+                </Pressable>
               </View>
             </View>
           </View>

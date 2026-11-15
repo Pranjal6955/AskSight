@@ -3,7 +3,7 @@ import { View } from "react-native";
 
 import { AppText } from "./AppText";
 
-type Tone = "error" | "success" | "info";
+type Tone = "error" | "success" | "info" | "warning";
 
 type Props = {
   tone: Tone;
@@ -29,6 +29,12 @@ const TONES = {
     border: "border-inputBorder",
     text: "text-ink",
   },
+  warning: {
+    icon: "alert-outline",
+    color: "#000000",
+    border: "border-brand",
+    text: "text-ink",
+  },
 } as const;
 
 export function StatusBanner({ tone, message }: Props) {
@@ -39,7 +45,7 @@ export function StatusBanner({ tone, message }: Props) {
       accessible
       accessibilityRole={tone === "error" ? "alert" : undefined}
       accessibilityLiveRegion={tone === "error" ? "assertive" : "polite"}
-      className={`flex-row items-start gap-3 rounded-field border-2 bg-white p-4 ${style.border}`}
+      className={`flex-row items-start gap-3 rounded-field border-2 p-4 ${style.border} ${tone === "warning" ? "bg-warning" : "bg-white"}`}
     >
       <MaterialCommunityIcons
         name={style.icon}

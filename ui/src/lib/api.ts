@@ -218,11 +218,14 @@ export async function readError(res: Response): Promise<string> {
   if (res.status === 422) {
     return "Please check the information you entered and try again.";
   }
+  if (res.status === 503) {
+    return "The model is unavailable right now. Please try again later.";
+  }
   if (res.status === 429) {
     return "Too many requests. Please wait a moment and try again.";
   }
   if (res.status === 504) {
-    return "That took too long. Please try again.";
+    return "The model took too long to answer. Please try again.";
   }
   if (res.status >= 500) {
     return "AskSight is having trouble right now. Please try again in a moment.";

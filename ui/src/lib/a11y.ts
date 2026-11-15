@@ -11,8 +11,15 @@ type AnnounceOptions = {
 
 // Android has no priority option; iOS has no plain equivalent, so route each
 // platform to the API it actually supports.
-export function announce(message: string, options: AnnounceOptions = {}) {
+export function announce(
+  message: string,
+  assertiveOrOptions: boolean | AnnounceOptions = {},
+) {
   if (!message) return;
+  const options: AnnounceOptions =
+    typeof assertiveOrOptions === "boolean"
+      ? { priority: assertiveOrOptions ? "high" : "default" }
+      : assertiveOrOptions;
   if (Platform.OS === "ios") {
     AccessibilityInfo.announceForAccessibilityWithOptions(message, options);
     return;

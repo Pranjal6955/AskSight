@@ -4,6 +4,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  fireEvent,
 } from "@testing-library/react-native";
 import * as SecureStore from "expo-secure-store";
 import type { ReactNode } from "react";
@@ -17,6 +18,9 @@ import {
   useTextScale,
 } from "../src/lib/settings";
 import * as useA11y from "../src/lib/useA11y";
+import * as a11y from "../src/lib/a11y";
+import SettingsScreen from "../src/app/(tabs)/settings";
+import { Providers } from "../test-utils";
 
 const KEY = "asksight.settings";
 
@@ -32,7 +36,7 @@ describe("settings", () => {
     expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
   });
 
-  test("loads stored settings and clamps invalid values", async () => {
+  test("loads stored settings and replaces invalid values", async () => {
     await SecureStore.setItemAsync(
       KEY,
       JSON.stringify({ speechRate: 99, textScale: "huge" }),
@@ -40,7 +44,7 @@ describe("settings", () => {
 
     const { result } = renderHook(() => useSettings(), { wrapper });
 
-    await waitFor(() => expect(result.current.settings.speechRate).toBe(2));
+    await waitFor(() => expect(result.current.settings.speechRate).toBe(1));
     expect(result.current.settings.textScale).toBe("system");
     expect(result.current.settings.speakAutomatically).toBe(true);
   });
@@ -140,5 +144,26 @@ describe("AppText", () => {
       fontSize: 36,
       lineHeight: 40,
     });
+  });
+});
+
+describe("Settings text scale preview", () => {
+  test("updates the sample immediately and announces the selected size", async () => {
+    const spoken = jest.spyOn(a11y, "announce").mockImplementation(() => {});
+    render(
+      <Providers>
+        <SettingsScreen />
+      </Providers>,
+    );
+
+    fireEvent.press(screen.getByRole("radio", { name: "Extra large" }));
+
+    expect(
+      screen.getByText("You can change the text size any time."),
+    ).toHaveStyle({
+      fontSize: 26,
+      lineHeight: 36.4,
+    });
+    expect(spoken).toHaveBeenCalledWith("Text size set to Extra large.");
   });
 });

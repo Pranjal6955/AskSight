@@ -8,8 +8,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppText } from "@/components/AppText";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { StatusBanner } from "@/components/StatusBanner";
-import { uploadImage, toFriendlyMessage, type UploadFile } from "@/lib/api";
+import {
+  ApiError,
+  uploadImage,
+  toFriendlyMessage,
+  type UploadFile,
+} from "@/lib/api";
 import { announce } from "@/lib/a11y";
+import { clearPendingPhoto, setPendingPhoto } from "@/lib/pendingPhoto";
 
 export default function PhotoPreviewScreen() {
   const params = useLocalSearchParams<{
@@ -30,6 +36,8 @@ export default function PhotoPreviewScreen() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState(false);
+  const [uploadFailed, setUploadFailed] = useState(false);
+  const [retryableUpload, setRetryableUpload] = useState(true);
   const launched = useRef(false);
 
   useEffect(() => {
@@ -41,29 +49,38 @@ export default function PhotoPreviewScreen() {
 
   async function choosePhoto() {
     setError("");
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setError(
-        "Photo library access is off. You can enable it in your device settings.",
-      );
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const asset = result.assets[0];
-      setPhoto({
-        uri: asset.uri,
-        name: asset.fileName ?? "asksight-photo.jpg",
-        type: asset.mimeType ?? "image/jpeg",
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setError(
+          "Photo library access is off. You can enable it in your device settings.",
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
       });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        setUploadFailed(false);
+        setRetryableUpload(true);
+        setPhoto({
+          uri: asset.uri,
+          name: asset.fileName ?? "asksight-photo.jpg",
+          type: asset.mimeType ?? "image/jpeg",
+        });
+      }
+    } catch {
+      setError("We couldn't open your photo library. Please try again.");
     }
   }
 
   async function handleUsePhoto() {
     if (!photo || loading) return;
+    setUploadFailed(false);
+    setPendingPhoto(photo);
     setLoading(true);
     setElapsed(false);
     const timer = setTimeout(() => {
@@ -72,6 +89,7 @@ export default function PhotoPreviewScreen() {
     }, 3000);
     try {
       const image = await uploadImage(photo);
+      clearPendingPhoto();
       router.replace({
         pathname: "/ask",
         params: { image_id: image.id },
@@ -82,6 +100,10 @@ export default function PhotoPreviewScreen() {
         "We couldn't upload that photo. Please try again.",
       );
       setError(message);
+      setUploadFailed(true);
+      setRetryableUpload(
+        !(cause instanceof ApiError && [413, 415, 422].includes(cause.status)),
+      );
       announce(message);
     } finally {
       clearTimeout(timer);
@@ -96,7 +118,10 @@ export default function PhotoPreviewScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close photo preview"
-            onPress={() => router.back()}
+            onPress={() => {
+              clearPendingPhoto();
+              router.back();
+            }}
             className="mb-5 h-12 w-12 items-center justify-center rounded-full border-2 border-inputBorder bg-white"
           >
             <MaterialCommunityIcons name="close" size={25} color="#000000" />
@@ -133,7 +158,7 @@ export default function PhotoPreviewScreen() {
               accessibilityLabel="Your photo"
               accessible
               resizeMode="contain"
-              className="mb-6 h-[min(48vh,420px)] w-full rounded-card bg-field"
+              className="mb-6 h-80 w-full rounded-card bg-field"
             />
           ) : (
             <View className="mb-6 h-56 items-center justify-center rounded-card bg-field">
@@ -143,11 +168,21 @@ export default function PhotoPreviewScreen() {
             </View>
           )}
           <PrimaryButton
-            label="Use Photo"
+            label={
+              uploadFailed
+                ? retryableUpload
+                  ? "Try Again"
+                  : "Choose Another"
+                : "Use Photo"
+            }
             loading={loading}
             loadingLabel={elapsed ? "Uploading photo…" : "Please wait…"}
             disabled={!photo}
-            onPress={() => void handleUsePhoto()}
+            onPress={() =>
+              uploadFailed && !retryableUpload
+                ? void choosePhoto()
+                : void handleUsePhoto()
+            }
           />
           {loading ? (
             <AppText
@@ -162,23 +197,28 @@ export default function PhotoPreviewScreen() {
             <Pressable
               accessibilityRole="button"
               disabled={loading}
-              onPress={() => router.replace("/capture" as never)}
+              onPress={() => {
+                clearPendingPhoto();
+                router.replace("/capture" as never);
+              }}
               className="min-h-14 flex-1 items-center justify-center rounded-field border-2 border-inputBorder bg-white px-3"
             >
               <AppText variant="bodyLarge" className="font-semibold text-ink">
                 Retake
               </AppText>
             </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              disabled={loading}
-              onPress={() => void choosePhoto()}
-              className="min-h-14 flex-1 items-center justify-center rounded-field border-2 border-inputBorder bg-white px-3"
-            >
-              <AppText variant="bodyLarge" className="font-semibold text-ink">
-                Choose Another
-              </AppText>
-            </Pressable>
+            {uploadFailed && !retryableUpload ? null : (
+              <Pressable
+                accessibilityRole="button"
+                disabled={loading}
+                onPress={() => void choosePhoto()}
+                className="min-h-14 flex-1 items-center justify-center rounded-field border-2 border-inputBorder bg-white px-3"
+              >
+                <AppText variant="bodyLarge" className="font-semibold text-ink">
+                  Choose Another
+                </AppText>
+              </Pressable>
+            )}
           </View>
         </View>
       </ScrollView>

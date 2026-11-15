@@ -9,6 +9,7 @@ import {
 
 import LoginScreen from "../src/app/login";
 import { AuthProvider } from "../src/lib/auth";
+import { clearPendingPhoto, setPendingPhoto } from "../src/lib/pendingPhoto";
 
 function renderLogin() {
   return renderRouter(
@@ -20,12 +21,14 @@ function renderLogin() {
       ),
       signup: () => <Text>Signup</Text>,
       "(tabs)/home": () => <Text>Home</Text>,
+      "photo-preview": () => <Text>Photo preview</Text>,
     },
     { initialUrl: "/login" },
   );
 }
 
 describe("Login screen", () => {
+  afterEach(() => clearPendingPhoto());
   describe("rendering", () => {
     test("displays the brand logo", async () => {
       await renderLogin();
@@ -140,6 +143,39 @@ describe("Login screen", () => {
       await waitFor(() => expect(router.getPathname()).toBe("/home"), {
         timeout: 3000,
       });
+    });
+
+    test("returns to the selected photo after signing in again", async () => {
+      const api = require("../src/lib/api");
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
+      jest.spyOn(api, "me").mockResolvedValue({
+        id: "1",
+        name: "John Smith",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+      setPendingPhoto({
+        uri: "file:///tmp/photo.jpg",
+        name: "photo.jpg",
+        type: "image/jpeg",
+      });
+
+      const router = await renderLogin();
+      fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Sign in"));
+
+      await waitFor(() => expect(router.getPathname()).toBe("/photo-preview"), {
+        timeout: 3000,
+      });
+      expect(screen.getByText("Photo preview")).toBeOnTheScreen();
     });
 
     test("ignores the secondary link during the success hold and still opens Home", async () => {

@@ -3,10 +3,14 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { AppText } from "@/components/AppText";
+import { announce } from "@/lib/a11y";
 import { useAuth } from "@/lib/auth";
+import { useSettings, type TextScale } from "@/lib/settings";
 
 export default function SettingsScreen() {
   const { user, signOut } = useAuth();
+  const { settings, update } = useSettings();
   const initials = user?.name
     .trim()
     .split(/\s+/)
@@ -70,6 +74,52 @@ export default function SettingsScreen() {
               </Text>
             </View>
           )}
+
+          <Text
+            className="mb-3 mt-8 text-2xl font-bold text-ink"
+            accessibilityRole="header"
+          >
+            Text size
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {(
+              [
+                ["system", "System"],
+                ["large", "Large"],
+                ["xlarge", "Extra large"],
+              ] as const
+            ).map(([scale, label]) => (
+              <Pressable
+                key={scale}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: settings.textScale === scale }}
+                onPress={() => {
+                  update("textScale", scale satisfies TextScale);
+                  announce(`Text size set to ${label}.`);
+                }}
+                className={`min-h-12 items-center justify-center rounded-field border-2 px-4 ${settings.textScale === scale ? "border-brand bg-brand" : "border-inputBorder bg-white"}`}
+              >
+                <AppText
+                  variant="body"
+                  className={
+                    settings.textScale === scale
+                      ? "font-bold text-white"
+                      : "font-semibold text-ink"
+                  }
+                >
+                  {label}
+                </AppText>
+              </Pressable>
+            ))}
+          </View>
+          <View className="mt-3 rounded-field border-2 border-inputBorder bg-white p-4">
+            <AppText variant="bodyLarge" className="font-semibold text-ink">
+              Sample text
+            </AppText>
+            <AppText variant="bodyLarge" className="mt-1 text-muted">
+              You can change the text size any time.
+            </AppText>
+          </View>
 
           <Pressable
             accessibilityRole="button"

@@ -17,9 +17,7 @@ export function useScreenReader(): boolean | null {
       .then((value) => {
         if (active) setEnabled(value);
       })
-      .catch(() => {
-        if (active) setEnabled(false);
-      });
+      .catch(() => {});
 
     const subscription = AccessibilityInfo.addEventListener(
       "screenReaderChanged",

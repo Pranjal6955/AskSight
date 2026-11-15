@@ -1,5 +1,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { ActivityIndicator, Pressable, Text } from "react-native";
+import { ActivityIndicator, Pressable } from "react-native";
+
+import { AppText } from "./AppText";
 
 type Props = {
   label: string;
@@ -43,16 +45,19 @@ export function PrimaryButton({
             size="small"
             importantForAccessibility="no-hide-descendants"
           />
-          <Text
-            className="text-3xl font-bold text-ink"
+          <AppText
+            variant="title"
             accessibilityLiveRegion="polite"
+            className="text-center text-ink"
           >
             {loadingLabel}
-          </Text>
+          </AppText>
         </>
       ) : (
         <>
-          <Text className="text-3xl font-bold text-white">{label}</Text>
+          <AppText variant="title" className="text-center text-white">
+            {label}
+          </AppText>
           <MaterialCommunityIcons
             name="arrow-right"
             size={26}

@@ -16,7 +16,7 @@ export type TextScale = "system" | "large" | "xlarge";
 
 export type Settings = {
   speakAutomatically: boolean;
-  speechRate: number;
+  speechRate: 0.8 | 1 | 1.2;
   textScale: TextScale;
   speechLanguage: string;
   consentGiven: boolean;
@@ -53,9 +53,9 @@ function sanitize(value: unknown): Settings {
     typeof value === "object" && value !== null
       ? (value as Partial<Settings>)
       : {};
-  const rate =
-    typeof raw.speechRate === "number" && Number.isFinite(raw.speechRate)
-      ? Math.min(2, Math.max(0.5, raw.speechRate))
+  const rate: Settings["speechRate"] =
+    raw.speechRate === 0.8 || raw.speechRate === 1 || raw.speechRate === 1.2
+      ? raw.speechRate
       : DEFAULT_SETTINGS.speechRate;
 
   return {

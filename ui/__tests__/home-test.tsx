@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Text } from "react-native";
 import {
   fireEvent,
@@ -11,7 +10,8 @@ import TabsLayout from "../src/app/(tabs)/_layout";
 import HistoryScreen from "../src/app/(tabs)/history";
 import HomeScreen from "../src/app/(tabs)/home";
 import SettingsScreen from "../src/app/(tabs)/settings";
-import { AuthProvider, useAuth } from "../src/lib/auth";
+import { AuthProvider } from "../src/lib/auth";
+import { SignedInProviders } from "../test-utils";
 
 const USER = {
   id: "1",
@@ -30,23 +30,19 @@ function mockSignedIn() {
   jest.spyOn(api, "me").mockResolvedValue(USER);
 }
 
-function SignInOnMount() {
-  const { signIn } = useAuth();
-  useEffect(() => {
-    signIn({ email: USER.email, password: "hunter2!" });
-  }, [signIn]);
-  return null;
-}
-
 function renderTabs({ signedIn = false } = {}) {
   return renderRouter(
     {
-      "(tabs)/_layout": () => (
-        <AuthProvider>
-          {signedIn ? <SignInOnMount /> : null}
-          <TabsLayout />
-        </AuthProvider>
-      ),
+      "(tabs)/_layout": () =>
+        signedIn ? (
+          <SignedInProviders>
+            <TabsLayout />
+          </SignedInProviders>
+        ) : (
+          <AuthProvider>
+            <TabsLayout />
+          </AuthProvider>
+        ),
       "(tabs)/home": HomeScreen,
       "(tabs)/history": HistoryScreen,
       "(tabs)/settings": SettingsScreen,
@@ -115,9 +111,16 @@ describe("Home screen", () => {
     test("shows the accessibility label for the camera card", async () => {
       await renderTabs();
       expect(
-        screen.getByLabelText(
-          "Ask with Camera. Take a photo and get an AI description of your surroundings",
-        ),
+        screen.getByLabelText("Take a photo. Opens the camera."),
+      ).toBeOnTheScreen();
+    });
+
+    test("offers the photo library beside the camera action", async () => {
+      await renderTabs();
+      expect(
+        screen.getByRole("button", {
+          name: "Choose a photo from your library",
+        }),
       ).toBeOnTheScreen();
     });
   });

@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 
 import * as a11y from "../src/lib/a11y";
 import { ActionCard } from "../src/components/ActionCard";
+import { AnswerBlock } from "../src/components/AnswerBlock";
 import { ConfirmDialog } from "../src/components/ConfirmDialog";
+import { HistoryRow } from "../src/components/HistoryRow";
+import { MicButton } from "../src/components/MicButton";
 import { ProgressAnnouncer } from "../src/components/ProgressAnnouncer";
 import { ScreenHeader } from "../src/components/ScreenHeader";
 import { SecondaryButton } from "../src/components/SecondaryButton";
@@ -16,6 +19,13 @@ describe("ScreenHeader", () => {
 
     expect(screen.getByRole("header")).toHaveTextContent("History");
     expect(screen.getByText("Your past questions")).toBeOnTheScreen();
+  });
+
+  test("shows a labelled back action when supplied", () => {
+    const onBack = jest.fn();
+    render(<ScreenHeader title="History" onBack={onBack} />);
+    fireEvent.press(screen.getByRole("button", { name: "Go back" }));
+    expect(onBack).toHaveBeenCalled();
   });
 });
 
@@ -63,6 +73,15 @@ describe("StatusBanner", () => {
     expect(alert).toHaveProp("accessibilityLiveRegion", "assertive");
   });
 
+  test("renders a warning with an icon and readable text", () => {
+    render(<StatusBanner tone="warning" message="Check this photo." />);
+    expect(screen.getByText("Check this photo.")).toBeOnTheScreen();
+    expect(
+      screen.UNSAFE_getByProps({ accessibilityLiveRegion: "polite" }).props
+        .accessibilityLiveRegion,
+    ).toBe("polite");
+  });
+
   test("announces successes politely", () => {
     render(<StatusBanner tone="success" message="Saved." />);
     expect(screen.getByText("Saved.")).toBeOnTheScreen();
@@ -70,6 +89,80 @@ describe("StatusBanner", () => {
       screen.UNSAFE_getByProps({ accessibilityLiveRegion: "polite" }).props
         .accessibilityLiveRegion,
     ).toBe("polite");
+  });
+});
+
+describe("MicButton", () => {
+  test.each([
+    ["idle", "Tap to speak", false, false],
+    ["listening", "Tap to stop", true, false],
+    ["processing", "Processing", false, true],
+  ] as const)(
+    "exposes %s state accessibly",
+    (state, label, selected, disabled) => {
+      render(<MicButton state={state} onPress={jest.fn()} />);
+      expect(screen.getByRole("button", { name: label })).toHaveProp(
+        "accessibilityState",
+        expect.objectContaining({ selected, disabled }),
+      );
+    },
+  );
+});
+
+describe("AnswerBlock", () => {
+  test("renders answer, playback label and verify note", () => {
+    const onPlaybackPress = jest.fn();
+    render(
+      <AnswerBlock
+        question="What does the sign say?"
+        answer="The sign says Main Street."
+        isPlaying={false}
+        onPlaybackPress={onPlaybackPress}
+      />,
+    );
+    fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
+    expect(screen.getByText("The sign says Main Street.")).toBeOnTheScreen();
+    expect(screen.getByText(/Answers can be wrong/)).toBeOnTheScreen();
+    expect(onPlaybackPress).toHaveBeenCalled();
+  });
+
+  test("changes the playback label while speaking", () => {
+    render(
+      <AnswerBlock
+        question="What is this?"
+        answer="A cup."
+        isPlaying
+        onPlaybackPress={jest.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Stop speaking" })).toHaveProp(
+      "accessibilityState",
+      expect.objectContaining({ selected: true }),
+    );
+  });
+});
+
+describe("HistoryRow", () => {
+  test("exposes the complete question, answer and date as one button", () => {
+    const onPress = jest.fn();
+    render(
+      <HistoryRow
+        question="What does this sign say?"
+        answer="It says Main Street."
+        createdAt={new Date().toISOString()}
+        onPress={onPress}
+      />,
+    );
+    const row = screen.getByRole("button");
+    expect(row.props.accessibilityLabel).toContain(
+      "Question: What does this sign say?",
+    );
+    expect(row.props.accessibilityLabel).toContain(
+      "Answer: It says Main Street.",
+    );
+    expect(row.props.accessibilityLabel).toContain("Asked Today at");
+    fireEvent.press(row);
+    expect(onPress).toHaveBeenCalled();
   });
 });
 
@@ -118,17 +211,35 @@ describe("ConfirmDialog", () => {
 });
 
 describe("ProgressAnnouncer", () => {
-  test("speaks each new progress message", () => {
+  test("announces start, the delayed wait and completion", () => {
+    jest.useFakeTimers();
     const spoken = jest.spyOn(a11y, "announce").mockImplementation(() => {});
 
     const { rerender } = render(
-      <ProgressAnnouncer message="Uploading photo" />,
+      <ProgressAnnouncer
+        working
+        startMessage="Uploading photo."
+        stillWorkingMessage="Still uploading."
+        finishMessage="Upload finished."
+      />,
     );
-    expect(spoken).toHaveBeenCalledWith("Uploading photo", { queue: true });
-
-    rerender(<ProgressAnnouncer message="Reading the photo" />);
-    expect(spoken).toHaveBeenLastCalledWith("Reading the photo", {
+    expect(spoken).toHaveBeenCalledWith("Uploading photo.", { queue: true });
+    act(() => jest.advanceTimersByTime(8000));
+    expect(spoken).toHaveBeenLastCalledWith("Still uploading.", {
       queue: true,
     });
+
+    rerender(
+      <ProgressAnnouncer
+        working={false}
+        startMessage="Uploading photo."
+        stillWorkingMessage="Still uploading."
+        finishMessage="Upload finished."
+      />,
+    );
+    expect(spoken).toHaveBeenLastCalledWith("Upload finished.", {
+      queue: true,
+    });
+    jest.useRealTimers();
   });
 });

@@ -26,8 +26,10 @@ export function SecondaryButton({
       accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       onPress={onPress}
-      className={`touch-target flex-row items-center justify-center gap-2 rounded-field border-2 border-brand bg-canvas px-6 py-4 active:bg-card-grey ${
-        isDisabled ? "opacity-60" : ""
+      className={`touch-target flex-row items-center justify-center gap-2 rounded-field border-2 px-6 py-4 ${
+        isDisabled
+          ? "border-inputBorder bg-field"
+          : "border-brand bg-canvas active:bg-card-grey"
       }`}
     >
       {loading ? <ActivityIndicator color="#000000" /> : null}

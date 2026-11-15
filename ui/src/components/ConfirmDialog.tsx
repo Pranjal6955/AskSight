@@ -60,6 +60,9 @@ export function ConfirmDialog({
           </AppText>
 
           <View className="mt-6 gap-3">
+            {destructive ? (
+              <SecondaryButton label={cancelLabel} onPress={onCancel} />
+            ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={onConfirm}
@@ -71,7 +74,9 @@ export function ConfirmDialog({
                 {confirmLabel}
               </AppText>
             </Pressable>
-            <SecondaryButton label={cancelLabel} onPress={onCancel} />
+            {!destructive ? (
+              <SecondaryButton label={cancelLabel} onPress={onCancel} />
+            ) : null}
           </View>
         </View>
       </View>

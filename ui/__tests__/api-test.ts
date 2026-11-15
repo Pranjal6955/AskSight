@@ -9,6 +9,14 @@ import {
   uploadImage,
   getImage,
   deleteHistoryEntry,
+  ask,
+  transcribe,
+  synthesize,
+  listHistory,
+  getHistoryEntry,
+  deleteAllHistory,
+  deleteImage,
+  logout,
   setSessionExpiredHandler,
 } from "../src/lib/api";
 import {
@@ -349,7 +357,8 @@ describe("error fallbacks", () => {
     [413, "That file is too large. Please choose a smaller one."],
     [415, "That file type is not supported. Please choose a different file."],
     [429, "Too many requests. Please wait a moment and try again."],
-    [504, "That took too long. Please try again."],
+    [503, "The model is unavailable right now. Please try again later."],
+    [504, "The model took too long to answer. Please try again."],
   ])("maps %i to a plain-language sentence", async (status, expected) => {
     expect(await readError(fakeResponse(status, {}))).toBe(expected);
   });
@@ -514,6 +523,150 @@ describe("delete", () => {
 
     expect(fetchSpy.mock.calls[0][0]).toContain("/history/id%201");
     expect(fetchSpy.mock.calls[0][1]?.method).toBe("DELETE");
+  });
+
+  test("deletes all history and an image with the expected routes", async () => {
+    setAccessToken("t");
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    await deleteAllHistory();
+    await deleteImage("image 1");
+
+    expect(fetchSpy.mock.calls[0][0]).toContain("/history");
+    expect(fetchSpy.mock.calls[0][1]?.method).toBe("DELETE");
+    expect(fetchSpy.mock.calls[1][0]).toContain("/images/image%201");
+    expect(fetchSpy.mock.calls[1][1]?.method).toBe("DELETE");
+  });
+});
+
+describe("Q&A and speech requests", () => {
+  beforeEach(() => setAccessToken("t"));
+
+  test("posts an image id and question to /ask", async () => {
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonBody(200, {
+        entry_id: "e1",
+        answer: "A cup.",
+        model_version: "mock-0.0.0",
+        created_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+
+    await expect(ask("img-1", "What is this?")).resolves.toMatchObject({
+      entry_id: "e1",
+    });
+    expect(fetchSpy.mock.calls[0][0]).toContain("/ask");
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      headers: expect.objectContaining({
+        Authorization: "Bearer t",
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify({ image_id: "img-1", question: "What is this?" }),
+    });
+  });
+
+  test("transcribes multipart audio without setting content type manually", async () => {
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        jsonBody(200, { transcript: "Read this sign", language: "en-IN" }),
+      );
+
+    await expect(
+      transcribe({
+        uri: "file:///voice.m4a",
+        name: "voice.m4a",
+        type: "audio/mp4",
+      }),
+    ).resolves.toMatchObject({ transcript: "Read this sign" });
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(fetchSpy.mock.calls[0][0]).toContain("/stt");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toMatchObject({ Authorization: "Bearer t" });
+    expect(
+      (init.headers as Record<string, string>)["Content-Type"],
+    ).toBeUndefined();
+    expect(init.body).toBeInstanceOf(FormData);
+  });
+
+  test("synthesizes speech with optional language and voice", async () => {
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new Uint8Array([1, 2]), {
+        status: 200,
+        headers: { "Content-Type": "audio/mpeg" },
+      }),
+    );
+
+    await expect(
+      synthesize("Hello", "en-IN", "speaker"),
+    ).resolves.toMatchObject({
+      mimeType: "audio/mpeg",
+    });
+    expect(fetchSpy.mock.calls[0][0]).toContain("/tts");
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({
+        text: "Hello",
+        language: "en-IN",
+        voice: "speaker",
+      }),
+    });
+  });
+});
+
+describe("history requests", () => {
+  beforeEach(() => setAccessToken("t"));
+
+  test("lists history with cursor and page size", async () => {
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        jsonBody(200, { items: [], next_cursor: null, has_more: false }),
+      );
+
+    await listHistory({ cursor: "next page", limit: 10 });
+
+    expect(fetchSpy.mock.calls[0][0]).toContain(
+      "/history?cursor=next%20page&limit=10",
+    );
+    expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
+      Authorization: "Bearer t",
+    });
+  });
+
+  test("loads one history entry by encoded id", async () => {
+    const fetchSpy = jest.spyOn(globalThis, "fetch").mockResolvedValue(
+      jsonBody(200, {
+        id: "h1",
+        question: "Q?",
+        answer: "A",
+        image_id: "i1",
+      }),
+    );
+
+    await getHistoryEntry("history 1");
+
+    expect(fetchSpy.mock.calls[0][0]).toContain("/history/history%201");
+    expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
+      Authorization: "Bearer t",
+    });
+  });
+
+  test("logs out with the refresh token", async () => {
+    const fetchSpy = jest
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(null, { status: 204 }));
+
+    await logout("r1");
+
+    expect(fetchSpy.mock.calls[0][0]).toContain("/auth/logout");
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({
+      method: "POST",
+      body: JSON.stringify({ refresh_token: "r1" }),
+    });
   });
 });
 
