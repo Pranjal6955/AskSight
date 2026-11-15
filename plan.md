@@ -3,9 +3,9 @@
 **Companion to:** [design.md](design.md) (the spec — read that first)
 **Scope:** the Expo mobile app in `ui/`, from today's auth-only shell to the full
 low-vision journey.
-**Status:** Phase 0 foundations and Phase 1 capture/upload implementation are
-complete. Phase 1 device accessibility verification remains open; Phase 2 and
-later journey phases are planned.
+**Status:** Phase 0 foundations, Phase 1 capture/upload, and Phase 2 ask flow
+are implemented. Phase 1 device accessibility verification remains open;
+Phase 3 answer playback and later journey phases are planned.
 
 The order below is deliberate: foundations first so every later screen is born
 accessible, then capture → ask → answer (the demo path), then history and
@@ -21,7 +21,7 @@ settings, then device verification and release.
 | Home, camera, library picker, photo preview and upload | Voice capture, STT, TTS, ask submission, history screens |
 | API client for auth, images, ask, speech and history; accessibility toolkit and settings store | Playback, history UI and full accessibility settings |
 | Design tokens and shared accessible components | About/release configuration |
-| 177 passing UI tests; lint and typecheck clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
+| 180 passing UI tests; lint and typecheck clean | Device TalkBack/VoiceOver pass, screen-curtain verification, release builds |
 | — | Core-journey end-to-end test and device accessibility pass |
 
 Ground rules for every task:
@@ -136,7 +136,7 @@ Story-style render in the existing test setup (no Storybook dependency).
 
 - [x] Shared test helpers for a signed-in `AuthProvider`, a fake API, and
   accessibility queries (`getByRole`, `getByLabelText`).
-- [x] Confirm all 177 UI tests pass; lint and typecheck are clean.
+- [x] Confirm all 180 UI tests pass; lint and typecheck are clean.
 
 ---
 
@@ -168,10 +168,9 @@ Story-style render in the existing test setup (no Storybook dependency).
 - [ ] Verify camera and screen-reader flows on real iOS and Android devices,
   including screen curtain.
 
-The current `src/app/ask.tsx` is a handoff placeholder that receives `image_id`;
-Phase 2 will replace it with the question-entry screen. Upload uses the existing
-fetch-based API helper, so it announces that upload is taking longer after 3 s
-but cannot report percentage progress yet.
+The Phase 2 Ask screen receives the uploaded `image_id` and selected photo URI.
+Upload uses the existing fetch-based API helper, so it announces that upload is
+taking longer after 3 s but cannot report percentage progress yet.
 
 Automated coverage passes for camera permission denial, library selection,
 upload failure/retry, oversized uploads, and resuming the selected photo after
@@ -191,30 +190,44 @@ or oversized.
 
 ## 4. Phase 2 — Ask by voice (C2)
 
-- [ ] `npx expo install expo-audio`.
-- [ ] `src/lib/useRecorder.ts`: permission check
+### Intended flow
+
+The selected/uploaded photo enters Ask with its `image_id` and a local photo
+thumbnail URI. The user can record a question or type one. Recording permission
+is explained before the OS prompt; if permission is denied, Settings and typed
+entry remain available. Stopping a recording sends it to `/stt`, then the user
+reviews and edits the transcript before confirming. Typed questions skip STT.
+Both paths submit `{ image_id, question }` to `/ask`, keep backend error detail
+visible for retry, and hand the returned answer payload to the Answer screen.
+Recording stops automatically after 60 seconds. Background recording and
+playback are disabled.
+
+- [x] `npx expo install expo-audio` (SDK 57-compatible version).
+- [x] `src/lib/useRecorder.ts`: permission check
   (`AudioModule.requestRecordingPermissionsAsync`), `useAudioRecorder` with
   `RecordingPresets.HIGH_QUALITY` (m4a is accepted by the backend), stop and
   return the file URI, 60 s auto-stop, cleanup on unmount.
-- [ ] `src/lib/useSpeech.ts`: `useAudioPlayer` for TTS playback, `play(uri)`,
+- [x] `src/lib/useSpeech.ts`: `useAudioPlayer` for TTS playback, `play(uri)`,
   `stop()`, `isPlaying`, audio-mode setup so it ducks/pauses other audio.
-- [ ] `src/app/ask.tsx`: photo thumbnail, giant `MicButton` (tap to start/stop),
+- [x] `src/app/ask.tsx`: photo thumbnail, giant `MicButton` (tap to start/stop),
   timer, "Cancel recording", typed fallback field with 1–500 char limit and
   visible label, example chips that fill (not submit), "Ask" primary.
-- [ ] Voice path: stop → `POST /stt` (multipart) → transcript screen.
-- [ ] `src/app/transcript.tsx`: "Did we hear you right?", transcript text,
+- [x] Voice path: stop → `POST /stt` (multipart) → transcript screen.
+- [x] `src/app/transcript.tsx`: "Did we hear you right?", transcript text,
   "Ask This Question" primary, "Speak Again", "Edit". Announce the transcript,
   focus the primary action.
-- [ ] Submit `POST /ask` with `{ image_id, question }`; navigate to Answer with
+- [x] Submit `POST /ask` with `{ image_id, question }`; navigate to Answer with
   the entry id and the answer payload.
-- [ ] Errors: STT 503 (no key) → "Voice isn't available right now. You can type
+- [x] Errors: STT 503 (no key) → "Voice isn't available right now. You can type
   your question."; empty audio, unsupported format, 429; offline.
-- [ ] Setting "send automatically after I stop speaking" (off by default) reads
-  from the settings store but can be implemented as a disabled stub until Phase 5.
+- [ ] Auto-send preference remains off/absent; it is deferred with the settings
+  work in Phase 5. Phase 2 always asks the user to review the transcript first.
 
-**Done when:** a recorded question becomes text, the user can confirm or edit,
-and the app sends it; typed questions work with voice unavailable; tests cover
-record → transcribe → confirm and transcription failure.
+**Done:** recorded questions become editable text, can be confirmed and sent;
+typed questions work if voice is unavailable; tests cover record → transcribe →
+confirm, transcription failure with typed fallback, and Ask failure with retry.
+Automated checks: 180 UI tests pass; lint and typecheck pass. Physical
+TalkBack/VoiceOver verification remains part of Phase 6.
 
 ---
 

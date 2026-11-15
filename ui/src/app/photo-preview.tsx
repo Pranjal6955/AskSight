@@ -92,7 +92,7 @@ export default function PhotoPreviewScreen() {
       clearPendingPhoto();
       router.replace({
         pathname: "/ask",
-        params: { image_id: image.id },
+        params: { image_id: image.id, photo_uri: photo.uri },
       } as never);
     } catch (cause) {
       const message = toFriendlyMessage(

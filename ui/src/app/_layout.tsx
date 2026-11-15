@@ -38,6 +38,8 @@ function RootNavigator() {
           options={{ presentation: "modal" }}
         />
         <Stack.Screen name="ask" options={{ presentation: "modal" }} />
+        <Stack.Screen name="transcript" options={{ presentation: "modal" }} />
+        <Stack.Screen name="answer" options={{ presentation: "modal" }} />
       </Stack.Protected>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="login" />
