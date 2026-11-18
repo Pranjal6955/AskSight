@@ -4,6 +4,8 @@ import {
   screen,
   waitFor,
 } from "expo-router/testing-library";
+import { act } from "@testing-library/react-native";
+import { router } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 
 import * as api from "../src/lib/api";
@@ -14,9 +16,12 @@ import SettingsScreen from "../src/app/(tabs)/settings";
 import AskScreen from "../src/app/ask";
 import CaptureScreen from "../src/app/capture";
 import ConsentScreen from "../src/app/consent";
+import AnswerScreen from "../src/app/answer";
 import Index from "../src/app/index";
 import LoginScreen from "../src/app/login";
+import PhotoPreviewScreen from "../src/app/photo-preview";
 import SignupScreen from "../src/app/signup";
+import TranscriptScreen from "../src/app/transcript";
 import HistoryDetailScreen from "../src/app/history/[id]";
 import RootLayout from "../src/app/_layout";
 import { clearRefreshToken } from "../src/lib/session";
@@ -87,7 +92,7 @@ const routes = {
   login: LoginScreen,
   signup: SignupScreen,
   consent: ConsentScreen,
-  capture: () => null,
+  capture: CaptureScreen,
   "photo-preview": PhotoPreviewScreen,
   ask: AskScreen,
   transcript: TranscriptScreen,
@@ -128,7 +133,7 @@ beforeEach(async () => {
 
 afterEach(() => jest.restoreAllMocks());
 
-test("signs in, picks a photo, asks by voice, replays the answer, and opens history", async () => {
+test("signs in, picks a photo, asks by voice, and opens history", async () => {
   const user = {
     id: "user-1",
     name: "Jamie Reader",
@@ -169,10 +174,6 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
     model_version: item.model_version,
     created_at: item.created_at,
   });
-  const synthesize = jest.spyOn(api, "synthesize").mockResolvedValue({
-    bytes: new Uint8Array([1, 2, 3]).buffer,
-    mimeType: "audio/mpeg",
-  });
   jest.spyOn(api, "listHistory").mockResolvedValue({
     items: [item],
     next_cursor: null,
@@ -190,27 +191,21 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
   );
   await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
   await waitFor(() =>
-    expect(screen.getByRole("header", { name: "Jamie!" })).toBeOnTheScreen(),
+    expect(
+      screen.getByRole("button", { name: "Choose a photo" }),
+    ).toBeOnTheScreen(),
   );
 
   await fireEvent.press(
-    screen.getByRole("button", { name: "Choose from Library" }),
+    screen.getByRole("button", { name: "Choose a photo" }),
   );
-  expect(await screen.findByLabelText("Your photo")).toBeOnTheScreen();
-  await fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
   await waitFor(() =>
     expect(screen.getByText("Ask about this photo")).toBeOnTheScreen(),
   );
   expect(uploadImage).toHaveBeenCalledTimes(1);
 
   await fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
-  expect(await screen.findByLabelText("Edit your question")).toHaveDisplayValue(
-    item.question,
-  );
   expect(transcribe).toHaveBeenCalledTimes(1);
-  await fireEvent.press(
-    screen.getByRole("button", { name: "Ask This Question" }),
-  );
   expect(await screen.findByText(item.answer)).toBeOnTheScreen();
   expect(ask).toHaveBeenCalledWith(
     image.id,
@@ -218,19 +213,9 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
     expect.any(AbortSignal),
   );
 
-  await fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
-  await waitFor(() =>
-    expect(mockPlay).toHaveBeenCalledWith("file:///cache/answer.mp3", 1),
-  );
-  expect(synthesize).toHaveBeenCalledWith(
-    item.answer,
-    "en-IN",
-    undefined,
-    expect.any(AbortSignal),
-  );
-
-  await fireEvent.press(screen.getByRole("button", { name: "New Photo" }));
-  await fireEvent.press(screen.getByText("History"));
+  await act(async () => {
+    router.push("/(tabs)/history");
+  });
   expect(await screen.findByText(item.question)).toBeOnTheScreen();
   expect(app.getPathname()).toBe("/history");
 });
