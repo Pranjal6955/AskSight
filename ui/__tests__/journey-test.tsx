@@ -196,9 +196,7 @@ test("signs in, picks a photo, asks by voice, and opens history", async () => {
     ).toBeOnTheScreen(),
   );
 
-  await fireEvent.press(
-    screen.getByRole("button", { name: "Choose a photo" }),
-  );
+  await fireEvent.press(screen.getByRole("button", { name: "Choose a photo" }));
   await waitFor(() =>
     expect(screen.getByText("Ask about this photo")).toBeOnTheScreen(),
   );
