@@ -54,8 +54,9 @@ uv venv --python 3.12 .venv            # or: python3.12 -m venv .venv
 ```bash
 # 1. Data: official VQA v2 questions/annotations + only the needed COCO images.
 #    Produces train.jsonl / val.jsonl / test.jsonl with image-disjoint splits.
-python -m asksight_model.data --out data/vqa --train 2000 --val 250 --test 250
-python -m asksight_model.data --out data/vqa --train 20000 --val 1000 --test 1000   # fuller run
+python -m asksight_model.data --out data/vqa --train 20000 --val 1000 --test 1000
+# Larger run (use a distinct output directory and experiment version):
+python -m asksight_model.data --out data/vqa-50k --train 50000 --val 2000 --test 2000
 
 # 2. Train the connector (2 epochs, batch 4, bf16 + gradient checkpointing by default).
 python -m asksight_model.train --config configs/default.yaml
@@ -120,48 +121,54 @@ saw 100 questions; do not demo it.
 
 `model/notebooks/colab_train.ipynb` (committed to the repo so Colab can clone it):
 
-1. Upload the notebook to Colab (File → Upload notebook) and **Runtime → Run all**.
-2. Defaults: `VERSION=v0.1-colab`, 2000/250/250 questions, `DTYPE=float16`
-   (free T4s have no native bf16), `SEED=0`.
-3. Roughly 30–40 minutes total; the final cell downloads the checkpoint zip.
+1. Upload the notebook to Colab (File → Upload notebook) or Kaggle (File → Import notebook).
+2. Defaults: `VERSION=v0.2-20k`, 20,000/1,000/1,000 questions, `DTYPE=float16`
+   (common free T4s have no native bf16), `SEED=0`. Edit the notebook counts
+   and version for 50,000/2,000/2,000.
+3. Runtime depends on dataset size and assigned GPU. Allow roughly 4–7 hours
+   for 20k including setup. The 50k estimate is about 8–16 hours by scaling
+   from the 20k run, not a measured result. The final cell downloads the zip.
 
 Desired output (abridged):
 
 ```
-train: 2003 questions, 365 images        # data cell; meta.json fingerprints follow
-epoch 0 step 0: loss ...                 # ~500 steps/epoch at batch 4
+train: <actual count> questions, <image count> images
+epoch 0 step 0: loss ...
 {"epoch": 0, "train_loss": ..., "val_loss": ...}
-checkpoint saved to checkpoints/v0.1-colab
-{"split": "test", ..., "vqa_accuracy": 0.xx, "latency_median_s": ...}   # evaluate cell
-VQA accuracy: xx.x% | latency median ...s, p95 ...s                    # summary cell
-v0.1-colab-ckpt.zip                                      # downloaded deliverable (~14 MB)
+checkpoint saved to checkpoints/v0.2-20k
+{"split": "test", ..., "vqa_accuracy": 0.xx, "latency_median_s": ...}
+v0.2-20k-ckpt.zip
 ```
 
 The notebook clones `feat/multimodal-core-workflow` — `main` does not carry
 `model/` yet, so a plain default-branch clone would fail at `%cd AskSight/model`.
+
+Free notebook runtimes and GPU availability can vary, and the current trainer
+saves its checkpoint at the end of a run only. Start with 20k; a 50k run may
+not fit one free session. Save the downloaded checkpoint zip before closing
+the session.
 
 Success criteria: `vqa_accuracy` printed from the held-out test split (this is
 the headline number), latency recorded, and a checkpoint folder matching the
 contents listed in "Training and checkpoints (B4)" above. Colab runtimes are
 ephemeral — the zip is the saved result.
 
-### Full run — Kaggle (free GPU, better for the larger run)
+### Kaggle run steps
 
-The same notebook works on Kaggle, which gives more weekly GPU time than free
-Colab and is less likely to cut a multi-hour run.
+1. Push the current notebook and model changes to `feat/multimodal-core-workflow`.
+2. In Kaggle, create a Notebook, import `model/notebooks/colab_train.ipynb`,
+   and set **Settings → Accelerator → GPU** and **Internet → On**.
+3. Keep the default 20k counts for the first run. Select **Run all** and watch
+   the output for the data, training, evaluation, and zip steps.
+4. Download the zip from the notebook's **Output** panel before ending the
+   session. The final cell copies it into `/kaggle/working` for this purpose.
 
-1. Create a Kaggle Notebook, set **Settings → Accelerator → GPU T4 ×2** (or
-   P100), and enable **Settings → Internet** — the notebook clones the repo and
-   downloads the dataset.
-2. **File → Import notebook** and upload `colab_train.ipynb` (or copy its cells).
-3. In the config cell, set `VERSION`, `TRAIN/VAL/TEST`, and
-   `DTYPE = "float16"`, then **Run all**.
-4. Download the checkpoint zip from the notebook's **Output** tab. On Kaggle the
-   Colab `files.download` cell falls back to printing the zip path.
-
-The same rules apply: push the branch first (the notebook clones
-`feat/multimodal-core-workflow`), and save the zip before closing the session.
-Use this path for the larger `20,000`-question run (`--train 20000`, ~3–6 h).
+Allow about 4–7 hours for 20k. A 50k run is roughly estimated at 8–16 hours,
+depending on GPU and data downloads; Kaggle documents a maximum 12-hour notebook
+session, so 50k may not fit one session. The trainer currently writes its
+checkpoint only at the end; use 20k on free compute until save/resume support
+is added. Kaggle's GPU availability and weekly quota can change; check its
+[notebook documentation](https://www.kaggle.com/docs/notebooks) before a run.
 
 ## Data pipeline (B3)
 
@@ -240,11 +247,43 @@ realistic capture fault per condition — `clean`, `blur`, `dark`, `obstructed`,
 numbers are noise, and the 263-question `v0.1-colab` run is indicative but small
 — set thresholds only from the release checkpoint run.
 
+### Fixed AskSight question set
+
+VQA v2 is a useful benchmark but does not represent every photo or question
+AskSight users will ask. Keep a separate, version-controlled or otherwise
+immutable JSONL set for representative app questions. Each line must include
+an `id`, an `image` path relative to the JSONL file, a `question`, and a
+`category` such as `object`, `color_count`, `scene`, or `reading_text`:
+
+```json
+{"id":"menu-01","image":"images/menu.jpg","question":"What does the soup cost?","category":"reading_text"}
+```
+
+Run it against a real checkpoint (the evaluator constructs
+`LocalInferenceService`, so the development mock cannot be selected):
+
+```bash
+python -m asksight_model.evaluate --checkpoint checkpoints/v0.1-colab \
+  --questions-file data/asksight/questions-v1.jsonl
+```
+
+The evaluator writes `predictions_asksight_<set-name>.jsonl` and an
+`eval_asksight_<set-name>` entry to the checkpoint's `metrics.json`. The
+metrics include the set's SHA-256, checkpoint/model version, saved system
+prompt and token limit, and latency/memory measurements. Predictions preserve
+question IDs, categories, and image paths for manual review. The evaluator does
+not infer correctness from an expected answer: annotate a reviewed copy for
+correctness, image support, brevity/usefulness, and error type (including
+missed text and invented details), and report those judgments separately.
+Keep the exact set fixed when comparing candidates; do not tune on it if it is
+being used as the final test set.
+
 ## Prompt
 
-The current default asks for clear English in one or two short sentences,
-grounded in visible details and suitable for screen-reader playback. The
-prompt comparison below tested older short-answer prompts on the smoke
+The current default asks for clear, grounded English. Direct answers should
+usually be one concise sentence; a request to describe a photo should receive
+three to five short sentences. The prompt comparison below tested older
+short-answer prompts on the smoke
 checkpoint; it does not measure the current conversational prompt:
 
 | prompt | VQA accuracy | answers with non-ASCII characters |
@@ -253,9 +292,25 @@ checkpoint; it does not measure the current conversational prompt:
 | **English, short phrase** | **0.200** | 5/30 |
 | English, one short sentence | 0.122 | 7/30 |
 
-The checkpoint's old prompt favored short VQA benchmark answers, but the app
-needs useful spoken responses. Re-run `experiment_prompts.py` to measure the
-current prompt against a release checkpoint before making accuracy claims.
+The VQA training targets are mostly short answers, so a new prompt by itself
+does not teach the model to produce useful descriptions. Add image-description
+examples to training and compare those outputs on a fixed, manually reviewed
+set. Re-run `experiment_prompts.py` to measure prompt behavior against a
+release checkpoint before making accuracy claims.
+
+### Adding AskSight examples to training
+
+The Colab/Kaggle notebook accepts optional custom examples through
+`CUSTOM_EXAMPLES_FILE`. Put images under the notebook's `data/vqa/` directory
+and provide one JSONL row per example with `question_id`, `image_id`, `image`,
+`question`, and `answer`. Use unique string IDs for custom examples and keep
+their images separate from validation/test images. Direct question examples
+should have concise answers. For description examples, use a prompt such as
+“Describe this photo” and a grounded three-to-five-sentence caption. Set
+`CUSTOM_EXAMPLES_FILE` in the notebook configuration cell; the merge cell adds
+these rows to training only and records their file fingerprint in dataset
+metadata. Review captions carefully because incorrect descriptions train the
+model to repeat those errors.
 
 ## Inference service (B5)
 
