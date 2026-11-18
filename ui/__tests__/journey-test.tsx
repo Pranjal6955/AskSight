@@ -180,14 +180,22 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
   });
 
   const app = await renderRouter(routes, { initialUrl: "/login" });
-  await fireEvent.changeText(screen.getByLabelText("Email address"), user.email);
-  await fireEvent.changeText(screen.getByLabelText("Password"), "secure-password");
+  await fireEvent.changeText(
+    screen.getByLabelText("Email address"),
+    user.email,
+  );
+  await fireEvent.changeText(
+    screen.getByLabelText("Password"),
+    "secure-password",
+  );
   await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
   await waitFor(() =>
     expect(screen.getByRole("header", { name: "Jamie!" })).toBeOnTheScreen(),
   );
 
-  await fireEvent.press(screen.getByRole("button", { name: "Choose from Library" }));
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Choose from Library" }),
+  );
   expect(await screen.findByLabelText("Your photo")).toBeOnTheScreen();
   await fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
   await waitFor(() =>
@@ -200,7 +208,9 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
     item.question,
   );
   expect(transcribe).toHaveBeenCalledTimes(1);
-  await fireEvent.press(screen.getByRole("button", { name: "Ask This Question" }));
+  await fireEvent.press(
+    screen.getByRole("button", { name: "Ask This Question" }),
+  );
   expect(await screen.findByText(item.answer)).toBeOnTheScreen();
   expect(ask).toHaveBeenCalledWith(
     image.id,

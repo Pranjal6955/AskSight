@@ -121,7 +121,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -157,7 +160,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -194,7 +200,10 @@ describe("Signup screen", () => {
 
       const router = await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -239,7 +248,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "  John Doe  ");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "  John Doe  ",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "  john@example.com  ",
@@ -276,7 +288,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -316,7 +331,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -340,7 +358,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -377,7 +398,10 @@ describe("Signup screen", () => {
 
       const router = await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -410,7 +434,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
@@ -431,7 +458,10 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
+        screen.getByLabelText("Full name"),
+        "John Doe",
+      );
       await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",

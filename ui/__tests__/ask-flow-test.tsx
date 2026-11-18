@@ -128,7 +128,9 @@ describe("ask flow", () => {
       screen.getByLabelText("Ask a follow-up question"),
       "What is in the photo?",
     );
-    await fireEvent.press(screen.getByRole("button", { name: "Send question" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Send question" }),
+    );
 
     expect(ask).toHaveBeenCalledWith(
       "image-2",
@@ -151,7 +153,9 @@ describe("ask flow", () => {
       );
     await renderFlow("/ask?image_id=image-3&question=Read%20this");
 
-    await fireEvent.press(screen.getByRole("button", { name: "Send question" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Send question" }),
+    );
 
     expect(
       await screen.findByText(

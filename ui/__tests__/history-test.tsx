@@ -184,7 +184,9 @@ describe("history list and detail", () => {
     expect(
       screen.getByText(/photo is also deleted if it was the last question/),
     ).toBeOnTheScreen();
-    await fireEvent.press(screen.getByRole("button", { name: "Delete Question" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Delete Question" }),
+    );
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith("entry-1"));
     expect(await screen.findByText("No questions yet")).toBeOnTheScreen();
@@ -225,7 +227,9 @@ describe("delete all history", () => {
       .mockResolvedValue(undefined);
     await renderHistory("/settings");
 
-    await fireEvent.press(screen.getByRole("button", { name: "Delete All History" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Delete All History" }),
+    );
     expect(
       screen.getByText(
         "This deletes every question, answer, and photo in your history. It cannot be undone.",

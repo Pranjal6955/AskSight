@@ -97,7 +97,9 @@ describe("session restore", () => {
       });
 
     const { result } = await renderAuth();
-    await act(() => expire?.("Your session has expired. Please sign in again."));
+    await act(() =>
+      expire?.("Your session has expired. Please sign in again."),
+    );
 
     expect(result.current.user).toBeNull();
     expect(result.current.sessionNotice).toBe(

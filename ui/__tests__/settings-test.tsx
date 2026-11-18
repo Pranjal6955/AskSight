@@ -177,7 +177,9 @@ describe("Settings text scale preview", () => {
     );
 
     await fireEvent.press(screen.getByRole("radio", { name: "Fast" }));
-    await fireEvent.press(screen.getByRole("radio", { name: "English (India)" }));
+    await fireEvent.press(
+      screen.getByRole("radio", { name: "English (India)" }),
+    );
 
     await waitFor(async () => {
       expect(await SecureStore.getItemAsync(KEY)).toContain('"speechRate":1.2');
@@ -258,7 +260,9 @@ describe("Settings text scale preview", () => {
         "You will need to sign in again to use AskSight.",
       ),
     ).toBeOnTheScreen();
-    await fireEvent.press(screen.getByRole("button", { name: "Stay Signed In" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Stay Signed In" }),
+    );
     expect(
       screen.queryByText("You will need to sign in again to use AskSight."),
     ).not.toBeOnTheScreen();
@@ -295,7 +299,9 @@ describe("Settings text scale preview", () => {
       </Providers>,
     );
 
-    await fireEvent.press(screen.getByRole("button", { name: "Delete All History" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Delete All History" }),
+    );
     await fireEvent.press(screen.getByRole("button", { name: "Delete All" }));
     expect(
       await screen.findByText("History could not be deleted."),

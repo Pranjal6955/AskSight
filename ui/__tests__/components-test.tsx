@@ -15,7 +15,9 @@ afterEach(() => jest.restoreAllMocks());
 
 describe("ScreenHeader", () => {
   test("renders the title as a heading with a subtitle", async () => {
-    await render(<ScreenHeader title="History" subtitle="Your past questions" />);
+    await render(
+      <ScreenHeader title="History" subtitle="Your past questions" />,
+    );
 
     expect(screen.getByRole("header")).toHaveTextContent("History");
     expect(screen.getByText("Your past questions")).toBeOnTheScreen();
