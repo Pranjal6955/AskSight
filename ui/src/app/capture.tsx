@@ -1,22 +1,69 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/AppText";
 import { StatusBanner } from "@/components/StatusBanner";
 import { announce } from "@/lib/a11y";
+import { setPendingPhoto } from "@/lib/pendingPhoto";
+import { ApiError, toFriendlyMessage, uploadImage } from "@/lib/api";
 
 export default function CaptureScreen() {
+  const params = useLocalSearchParams<{ pick?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [taking, setTaking] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState("");
   const camera = useRef<CameraView>(null);
+  const pickerOpened = useRef(false);
+
+  const uploadPhoto = useCallback(async (uri: string, name: string, type: string) => {
+    if (taking) return;
+    setTaking(true);
+    setError("");
+    const photo = { uri, previewUri: uri, name, type };
+    setPendingPhoto(photo);
+    try {
+      const image = await uploadImage(photo);
+      router.replace({ pathname: "/ask", params: { image_id: image.id } } as never);
+    } catch (cause) {
+      const message = toFriendlyMessage(cause, "We couldn't upload that photo. Please try again.");
+      setError(cause instanceof ApiError && cause.status === 413 ? "Choose a smaller photo." : message);
+      setTaking(false);
+    }
+  }, [taking]);
+
+  const choosePhoto = useCallback(async () => {
+    try {
+      const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!mediaPermission.granted) {
+        setError("Photo library access is off. Enable it in settings or take a photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+      if (result.canceled || !result.assets[0]) {
+        if (params.pick === "1" && !permission?.granted) router.back();
+        return;
+      }
+      const asset = result.assets[0];
+      await uploadPhoto(asset.uri, asset.fileName ?? "asksight-photo.jpg", asset.mimeType ?? "image/jpeg");
+    } catch (cause) {
+      setError(toFriendlyMessage(cause, "We couldn't choose that photo. Please try again."));
+    }
+  }, [params.pick, permission, uploadPhoto]);
+
+  useEffect(() => {
+    if (params.pick === "1" && !pickerOpened.current) {
+      pickerOpened.current = true;
+      void choosePhoto();
+    }
+  }, [params.pick, choosePhoto]);
 
   useEffect(() => {
     if (permission?.granted)
@@ -44,18 +91,12 @@ export default function CaptureScreen() {
         imageType: "jpg",
       });
       if (result?.uri) {
+        const uri = result.uri;
         announce("Photo taken.");
         void Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success,
         ).catch(() => {});
-        router.replace({
-          pathname: "/photo-preview",
-          params: {
-            uri: result.uri,
-            name: "asksight-photo.jpg",
-            type: "image/jpeg",
-          },
-        } as never);
+        await uploadPhoto(uri, "asksight-photo.jpg", "image/jpeg");
       }
     } catch {
       const message = "We couldn't take that photo. Please try again.";
@@ -66,7 +107,7 @@ export default function CaptureScreen() {
     }
   }
 
-  if (!permission?.granted) {
+  if (!permission?.granted && params.pick !== "1") {
     const denied = permission?.canAskAgain === false;
     return (
       <SafeAreaView className="flex-1 bg-canvas" edges={["top", "bottom"]}>
@@ -105,7 +146,7 @@ export default function CaptureScreen() {
           </Pressable>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.replace("/photo-preview?pick=1" as never)}
+            onPress={() => void choosePhoto()}
             className="mb-3 min-h-14 items-center justify-center rounded-field border-2 border-inputBorder bg-white px-5"
           >
             <AppText variant="bodyLarge" className="font-bold text-ink">
@@ -140,6 +181,12 @@ export default function CaptureScreen() {
         }}
         pointerEvents="none"
       />
+      {taking ? (
+        <View accessibilityRole="progressbar" accessibilityLabel="Preparing photo" className="absolute inset-0 z-10 items-center justify-center bg-black/70">
+          <ActivityIndicator size="large" color="white" />
+          <AppText variant="bodyLarge" className="mt-4 font-semibold text-white">Preparing your photo…</AppText>
+        </View>
+      ) : null}
       {!cameraReady ? (
         <View
           pointerEvents="none"
@@ -211,7 +258,7 @@ export default function CaptureScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Choose from Library"
-            onPress={() => router.replace("/photo-preview?pick=1" as never)}
+            onPress={() => void choosePhoto()}
             className="min-h-14 min-w-14 items-center justify-center rounded-full bg-white/15"
           >
             <MaterialCommunityIcons

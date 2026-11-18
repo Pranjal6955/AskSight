@@ -62,6 +62,7 @@ export type HistoryPage = {
 
 export type UploadFile = {
   uri: string;
+  previewUri?: string;
   name: string;
   type: string;
 };
@@ -122,7 +123,46 @@ async function send(
     headers["Content-Type"] = "application/json";
   }
 
+  if (isForm && init.body instanceof FormData) {
+    return sendMultipart(`${BASE_URL}${path}`, init, headers);
+  }
   return fetch(`${BASE_URL}${path}`, { ...init, headers });
+}
+
+function sendMultipart(
+  url: string,
+  init: JsonInit,
+  headers: Record<string, string>,
+): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(init.method ?? "POST", url, true);
+    for (const [name, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(name, value);
+    }
+    xhr.onload = () => {
+      const responseHeaders = new Headers();
+      for (const line of xhr.getAllResponseHeaders().trim().split(/[\r\n]+/)) {
+        const separator = line.indexOf(":");
+        if (separator > 0) {
+          responseHeaders.append(
+            line.slice(0, separator).trim(),
+            line.slice(separator + 1).trim(),
+          );
+        }
+      }
+      resolve(
+        new Response(xhr.responseText, {
+          status: xhr.status,
+          statusText: xhr.statusText,
+          headers: responseHeaders,
+        }),
+      );
+    };
+    xhr.onerror = () => reject(new TypeError("Network request failed"));
+    xhr.onabort = () => reject(new Error("Upload was cancelled."));
+    xhr.send(init.body as FormData);
+  });
 }
 
 async function sendOk(
@@ -337,8 +377,11 @@ async function authorized<T>(
 
 function fileForm(file: UploadFile): FormData {
   const form = new FormData();
-  // React Native accepts { uri, name, type } here; the DOM types do not.
-  form.append("file", file as unknown as Blob);
+  form.append("file", {
+    uri: file.uri,
+    name: file.name,
+    type: file.type,
+  } as unknown as Blob);
   return form;
 }
 

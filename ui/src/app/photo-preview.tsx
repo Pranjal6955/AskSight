@@ -15,23 +15,25 @@ import {
   type UploadFile,
 } from "@/lib/api";
 import { announce } from "@/lib/a11y";
-import { clearPendingPhoto, setPendingPhoto } from "@/lib/pendingPhoto";
+import { clearPendingPhoto, getPendingPhoto, setPendingPhoto } from "@/lib/pendingPhoto";
 
 export default function PhotoPreviewScreen() {
   const params = useLocalSearchParams<{
     uri?: string;
+    preview_uri?: string;
     name?: string;
     type?: string;
     pick?: string;
   }>();
   const [photo, setPhoto] = useState<UploadFile | null>(
-    params.uri
+    getPendingPhoto() ?? (params.uri
       ? {
           uri: params.uri,
+          previewUri: params.preview_uri,
           name: params.name ?? "asksight-photo.jpg",
           type: params.type ?? "image/jpeg",
         }
-      : null,
+      : null),
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,6 +70,7 @@ export default function PhotoPreviewScreen() {
         setRetryableUpload(true);
         setPhoto({
           uri: asset.uri,
+          previewUri: asset.uri,
           name: asset.fileName ?? "asksight-photo.jpg",
           type: asset.mimeType ?? "image/jpeg",
         });
@@ -92,7 +95,10 @@ export default function PhotoPreviewScreen() {
       clearPendingPhoto();
       router.replace({
         pathname: "/ask",
-        params: { image_id: image.id, photo_uri: photo.uri },
+        params: {
+          image_id: image.id,
+          photo_uri: photo.previewUri ?? photo.uri,
+        },
       } as never);
     } catch (cause) {
       const message = toFriendlyMessage(
@@ -154,11 +160,12 @@ export default function PhotoPreviewScreen() {
           ) : null}
           {photo ? (
             <Image
-              source={{ uri: photo.uri }}
+              source={{ uri: photo.previewUri ?? photo.uri }}
               accessibilityLabel="Your photo"
               accessible
               resizeMode="contain"
-              className="mb-6 h-80 w-full rounded-card bg-field"
+              onError={() => setError("We couldn't display this photo. Please choose it again.")}
+              style={{ height: 320, width: "100%", marginBottom: 24, borderRadius: 20, backgroundColor: "#F2F2F2" }}
             />
           ) : (
             <View className="mb-6 h-56 items-center justify-center rounded-card bg-field">

@@ -1,10 +1,13 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
+import { File, Paths } from "expo-file-system";
 import { router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Linking,
   Pressable,
+  Platform,
   ScrollView,
   TextInput,
   View,
@@ -18,16 +21,13 @@ import { ProgressAnnouncer } from "@/components/ProgressAnnouncer";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { ThinkingPanel } from "@/components/ThinkingPanel";
-import { toFriendlyMessage, transcribe, type UploadFile } from "@/lib/api";
+import { synthesize, toFriendlyMessage, transcribe, type UploadFile } from "@/lib/api";
 import { announce } from "@/lib/a11y";
 import { useRecorder } from "@/lib/useRecorder";
 import { useAskQuestion } from "@/lib/useAskQuestion";
-
-const EXAMPLES = [
-  "What does this say?",
-  "What colour is this?",
-  "Is this safe to eat?",
-];
+import { getPendingPhoto } from "@/lib/pendingPhoto";
+import { useAutoSpeak, useSettings } from "@/lib/settings";
+import { useSpeech } from "@/lib/useSpeech";
 
 function formatDuration(ms: number) {
   const seconds = Math.floor(ms / 1000);
@@ -41,12 +41,56 @@ export default function AskScreen() {
     question?: string;
   }>();
   const imageId = params.image_id ?? "";
+  const photoUri = params.photo_uri ?? getPendingPhoto()?.previewUri ?? getPendingPhoto()?.uri ?? "";
   const [question, setQuestion] = useState(params.question ?? "");
+  const [messages, setMessages] = useState<{ question: string; answer: string }[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"transcribing" | "">("");
   const [permissionPrompt, setPermissionPrompt] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(Boolean(photoUri));
+  const [speechLoading, setSpeechLoading] = useState(false);
   const askRequest = useAskQuestion(imageId);
+  const autoSpeak = useAutoSpeak();
+  const { settings } = useSettings();
+  const { play: playSpeech, stop: stopSpeech } = useSpeech();
+  const speechFile = useRef<File | null>(null);
+
+  const speakAnswer = useCallback(async (text: string) => {
+    setSpeechLoading(true);
+    try {
+      const audio = await synthesize(text, settings.speechLanguage);
+      let uri: string;
+      if (Platform.OS === "web") {
+        uri = URL.createObjectURL(new Blob([audio.bytes], { type: audio.mimeType || "audio/mpeg" }));
+      } else {
+        const file = new File(Paths.cache, `asksight-chat-${Date.now()}.mp3`);
+        file.create({ intermediates: true, overwrite: true });
+        await file.write(new Uint8Array(audio.bytes));
+        speechFile.current?.delete();
+        speechFile.current = file;
+        uri = file.uri;
+      }
+      await playSpeech(uri, settings.speechRate);
+    } finally {
+      setSpeechLoading(false);
+    }
+  }, [playSpeech, settings.speechLanguage, settings.speechRate]);
+
+  useEffect(() => () => {
+    void stopSpeech();
+    if (speechFile.current?.exists) speechFile.current.delete();
+  }, [stopSpeech]);
+
+  const addAnswer = useCallback((spokenQuestion: string, answer: string) => {
+    setMessages((current) => [...current, { question: spokenQuestion, answer }]);
+    setQuestion("");
+    if (autoSpeak) {
+      void speakAnswer(answer).catch((cause) => {
+        setError(toFriendlyMessage(cause, "We couldn't play the spoken answer."));
+      });
+    }
+  }, [autoSpeak, speakAnswer]);
 
   const processRecording = useCallback(
     async (file: UploadFile) => {
@@ -60,14 +104,12 @@ export default function AskScreen() {
           );
           return;
         }
-        router.push({
-          pathname: "/transcript",
-          params: {
-            image_id: imageId,
-            photo_uri: params.photo_uri ?? "",
-            transcript: result.transcript,
-          },
-        } as never);
+        const spokenQuestion = result.transcript.trim();
+        setQuestion(spokenQuestion);
+        const answer = await askRequest.submit(spokenQuestion);
+        if (answer) {
+          addAnswer(spokenQuestion, answer.answer);
+        }
       } catch (cause) {
         setError(
           toFriendlyMessage(
@@ -79,7 +121,7 @@ export default function AskScreen() {
         setBusy("");
       }
     },
-    [imageId, params.photo_uri],
+    [addAnswer, askRequest],
   );
   const handleAutoStop = useCallback(
     (file: UploadFile | null) => {
@@ -128,16 +170,7 @@ export default function AskScreen() {
     }
     const answer = await askRequest.submit(cleaned);
     if (answer) {
-      router.replace({
-        pathname: "/answer",
-        params: {
-          image_id: imageId,
-          photo_uri: params.photo_uri ?? "",
-          question: cleaned,
-          ...answer,
-          history_error: answer.historyError,
-        },
-      } as never);
+      addAnswer(cleaned, answer.answer);
     }
   }
 
@@ -166,31 +199,37 @@ export default function AskScreen() {
           busy === "transcribing" ? "Transcription finished." : null
         }
       />
+      <View className="flex-row items-center justify-between px-5 py-3">
+        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} className="h-12 w-12 items-center justify-center rounded-full">
+          <MaterialCommunityIcons name="arrow-left" size={28} color="#000000" />
+        </Pressable>
+        <View className="flex-row items-center gap-2" accessible accessibilityLabel="AskSight">
+          <MaterialCommunityIcons name="eye" size={28} color="#000000" importantForAccessibility="no-hide-descendants" />
+          <AppText variant="section" className="text-ink">AskSight</AppText>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.navigate("/(tabs)/settings")} className="h-12 w-12 items-center justify-center rounded-full">
+          <MaterialCommunityIcons name="cog" size={28} color="#000000" />
+        </Pressable>
+      </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"
-        contentContainerClassName="flex-grow justify-center px-6 py-5"
+        contentContainerClassName="flex-grow px-6 py-5 pb-4"
       >
         <View className="mx-auto w-full max-w-[560px] gap-5">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            onPress={() => router.back()}
-            className="h-12 w-12 items-center justify-center rounded-full border-2 border-inputBorder bg-white"
-          >
-            <MaterialCommunityIcons
-              name="arrow-left"
-              size={25}
-              color="#000000"
-            />
-          </Pressable>
           <View className="flex-row items-center gap-4">
-            {params.photo_uri ? (
-              <Image
-                source={{ uri: params.photo_uri }}
-                accessible
-                accessibilityLabel="Photo you are asking about"
-                className="h-20 w-20 rounded-card bg-field"
-              />
+            {photoUri ? (
+              <View className="h-20 w-20 items-center justify-center overflow-hidden rounded-card bg-field">
+                {photoLoading ? <ActivityIndicator color="#000000" /> : null}
+                <Image
+                  source={{ uri: photoUri }}
+                  accessible
+                  accessibilityLabel="Photo you are asking about"
+                  onLoadStart={() => setPhotoLoading(true)}
+                  onLoadEnd={() => setPhotoLoading(false)}
+                  onError={() => setPhotoLoading(false)}
+                  className="absolute inset-0 h-full w-full"
+                />
+              </View>
             ) : null}
             <AppText
               variant="hero"
@@ -200,6 +239,17 @@ export default function AskScreen() {
               Ask about this photo
             </AppText>
           </View>
+
+          {messages.map((message, index) => (
+            <View key={`${index}-${message.question}`} className="gap-3">
+              <View className="self-end rounded-card bg-field px-5 py-4">
+                <AppText variant="bodyLarge" className="text-ink">{message.question}</AppText>
+              </View>
+              <View className="self-stretch rounded-card border-2 border-inputBorder bg-white px-5 py-4">
+                <AppText variant="answer" className="text-ink">{message.answer}</AppText>
+              </View>
+            </View>
+          ))}
 
           {!imageId ? (
             <StatusBanner tone="error" message="Please choose a photo first." />
@@ -245,64 +295,6 @@ export default function AskScreen() {
             </View>
           ) : null}
 
-          <View className="items-center gap-2 py-2">
-            <MicButton
-              state={micState}
-              onPress={() => void toggleRecording()}
-            />
-            {recorder.isRecording ? (
-              <AppText
-                variant="bodyLarge"
-                accessibilityLiveRegion="polite"
-                className="font-semibold text-ink"
-              >
-                Listening · {formatDuration(recorder.durationMillis)} of 1:00
-              </AppText>
-            ) : null}
-            {recorder.isRecording ? (
-              <SecondaryButton
-                label="Cancel recording"
-                onPress={() => void recorder.cancelRecording()}
-              />
-            ) : null}
-          </View>
-
-          <View className="gap-2">
-            <AppText variant="bodyLarge" className="font-semibold text-ink">
-              Or type your question
-            </AppText>
-            <TextInput
-              accessibilityLabel="Your question"
-              accessibilityHint="Enter up to 500 characters about the photo."
-              value={question}
-              onChangeText={setQuestion}
-              multiline
-              maxLength={500}
-              placeholder="Type a question about this photo"
-              placeholderTextColor="#404040"
-              textAlignVertical="top"
-              className="min-h-28 rounded-field border-2 border-inputBorder bg-input px-4 py-3 text-xl text-ink"
-            />
-            <AppText variant="supporting" className="text-muted">
-              {question.length} of 500 characters
-            </AppText>
-          </View>
-
-          <View className="flex-row flex-wrap gap-2">
-            {EXAMPLES.map((example) => (
-              <Pressable
-                key={example}
-                accessibilityRole="button"
-                accessibilityLabel={`Fill question: ${example}`}
-                onPress={() => setQuestion(example)}
-                className="min-h-12 justify-center rounded-full border-2 border-inputBorder bg-white px-4"
-              >
-                <AppText variant="body" className="font-semibold text-ink">
-                  {example}
-                </AppText>
-              </Pressable>
-            ))}
-          </View>
           {askRequest.loading ? (
             <ThinkingPanel
               onCancel={() => {
@@ -310,17 +302,49 @@ export default function AskScreen() {
                 announce("Stopped waiting. The request may still complete.");
               }}
             />
-          ) : (
-            <PrimaryButton
-              label={askRequest.error ? "Try Again" : "Ask"}
-              disabled={
-                !imageId || recorder.isRecording || busy === "transcribing"
-              }
-              onPress={() => void submitQuestion()}
-            />
-          )}
+          ) : null}
+          {speechLoading ? (
+            <View className="flex-row items-center gap-3" accessibilityLiveRegion="polite">
+              <ActivityIndicator color="#000000" />
+              <AppText variant="body" className="text-muted">Preparing spoken answer…</AppText>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
+      <SafeAreaView edges={["bottom"]} className="bg-white px-4 pb-3 pt-3">
+        <View className="mx-auto w-full max-w-[560px] flex-row items-center gap-3">
+          <MicButton compact state={micState} onPress={() => void toggleRecording()} />
+          <TextInput
+            accessibilityLabel="Ask a follow-up question"
+            accessibilityHint="Type a question about the photo."
+            value={question}
+            onChangeText={setQuestion}
+            maxLength={500}
+            placeholder="Ask a follow-up…"
+            placeholderTextColor="#404040"
+            returnKeyType="send"
+            onSubmitEditing={() => void submitQuestion()}
+            editable={!askRequest.loading && busy !== "transcribing"}
+            className="h-14 min-w-0 flex-1 rounded-field border-2 border-inputBorder bg-white px-4 text-xl text-ink"
+          />
+          {recorder.isRecording ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Stop recording" onPress={() => void toggleRecording()} className="h-14 w-14 items-center justify-center rounded-full bg-warning">
+              <MaterialCommunityIcons name="stop" size={28} color="#000000" />
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Send question"
+              disabled={!question.trim() || !imageId || askRequest.loading || busy === "transcribing"}
+              onPress={() => void submitQuestion()}
+              className="h-14 w-14 items-center justify-center rounded-full bg-brand disabled:bg-brand-muted"
+            >
+              <MaterialCommunityIcons name="send" size={26} color="white" />
+            </Pressable>
+          )}
+        </View>
+        {recorder.isRecording ? <AppText variant="supporting" accessibilityLiveRegion="polite" className="mt-2 text-center text-ink">Listening · {formatDuration(recorder.durationMillis)}</AppText> : null}
+      </SafeAreaView>
     </SafeAreaView>
   );
 }
