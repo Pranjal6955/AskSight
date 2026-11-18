@@ -1,5 +1,7 @@
 # AskSight Model (Track B)
 
+Model quality work is tracked in [MODEL_QUALITY_TASK.md](./MODEL_QUALITY_TASK.md).
+
 LLaVA-style visual question answering: a frozen CLIP vision encoder, a small
 trainable projection connector, and a frozen instruction-tuned language model.
 Only the connector is trained; a checkpoint is ~14 MB plus its config.

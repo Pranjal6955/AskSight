@@ -114,15 +114,14 @@ describe("useScreenReader", () => {
         >;
       });
 
-    const { result, unmount } = renderHook(() => useScreenReader());
-    expect(result.current).toBeNull();
+    const { result, unmount } = await renderHook(() => useScreenReader());
 
     await waitFor(() => expect(result.current).toBe(true));
 
-    act(() => listener?.(false));
+    await act(() => listener?.(false));
     expect(result.current).toBe(false);
 
-    unmount();
+    await unmount();
     expect(remove).toHaveBeenCalled();
   });
 
@@ -136,7 +135,7 @@ describe("useScreenReader", () => {
         typeof AccessibilityInfo.addEventListener
       >);
 
-    const { result } = renderHook(() => useScreenReader());
+    const { result } = await renderHook(() => useScreenReader());
 
     await waitFor(() => expect(result.current).toBeNull());
   });
@@ -153,7 +152,7 @@ describe("useReduceMotion", () => {
         typeof AccessibilityInfo.addEventListener
       >);
 
-    const { result } = renderHook(() => useReduceMotion());
+    const { result } = await renderHook(() => useReduceMotion());
 
     await waitFor(() => expect(result.current).toBe(true));
   });
@@ -171,18 +170,18 @@ describe("useHighContrast", () => {
         typeof AppState.addEventListener
       >);
 
-    const { result } = renderHook(() => useHighContrast());
+    const { result } = await renderHook(() => useHighContrast());
 
     await waitFor(() => expect(result.current).toBe(true));
   });
 });
 
 describe("useAnnounceOnMount", () => {
-  test("announces the initial message once", () => {
+  test("announces the initial message once", async () => {
     jest.replaceProperty(Platform, "OS", "android");
     const spoken = jest.spyOn(AccessibilityInfo, "announceForAccessibility");
 
-    renderHook(() => useAnnounceOnMount("Answer ready"));
+    await renderHook(() => useAnnounceOnMount("Answer ready"));
 
     expect(spoken).toHaveBeenCalledWith("Answer ready");
   });

@@ -11,14 +11,12 @@ import TabsLayout from "../src/app/(tabs)/_layout";
 import HistoryScreen from "../src/app/(tabs)/history";
 import HomeScreen from "../src/app/(tabs)/home";
 import SettingsScreen from "../src/app/(tabs)/settings";
-import AnswerScreen from "../src/app/answer";
 import AskScreen from "../src/app/ask";
+import CaptureScreen from "../src/app/capture";
 import ConsentScreen from "../src/app/consent";
 import Index from "../src/app/index";
 import LoginScreen from "../src/app/login";
-import PhotoPreviewScreen from "../src/app/photo-preview";
 import SignupScreen from "../src/app/signup";
-import TranscriptScreen from "../src/app/transcript";
 import HistoryDetailScreen from "../src/app/history/[id]";
 import RootLayout from "../src/app/_layout";
 import { clearRefreshToken } from "../src/lib/session";
@@ -182,27 +180,27 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
   });
 
   const app = await renderRouter(routes, { initialUrl: "/login" });
-  fireEvent.changeText(screen.getByLabelText("Email address"), user.email);
-  fireEvent.changeText(screen.getByLabelText("Password"), "secure-password");
-  fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
+  await fireEvent.changeText(screen.getByLabelText("Email address"), user.email);
+  await fireEvent.changeText(screen.getByLabelText("Password"), "secure-password");
+  await fireEvent.press(screen.getByRole("button", { name: "Sign in" }));
   await waitFor(() =>
     expect(screen.getByRole("header", { name: "Jamie!" })).toBeOnTheScreen(),
   );
 
-  fireEvent.press(screen.getByRole("button", { name: "Choose from Library" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Choose from Library" }));
   expect(await screen.findByLabelText("Your photo")).toBeOnTheScreen();
-  fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
   await waitFor(() =>
     expect(screen.getByText("Ask about this photo")).toBeOnTheScreen(),
   );
   expect(uploadImage).toHaveBeenCalledTimes(1);
 
-  fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
   expect(await screen.findByLabelText("Edit your question")).toHaveDisplayValue(
     item.question,
   );
   expect(transcribe).toHaveBeenCalledTimes(1);
-  fireEvent.press(screen.getByRole("button", { name: "Ask This Question" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Ask This Question" }));
   expect(await screen.findByText(item.answer)).toBeOnTheScreen();
   expect(ask).toHaveBeenCalledWith(
     image.id,
@@ -210,7 +208,7 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
     expect.any(AbortSignal),
   );
 
-  fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
+  await fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
   await waitFor(() =>
     expect(mockPlay).toHaveBeenCalledWith("file:///cache/answer.mp3", 1),
   );
@@ -221,8 +219,8 @@ test("signs in, picks a photo, asks by voice, replays the answer, and opens hist
     expect.any(AbortSignal),
   );
 
-  fireEvent.press(screen.getByRole("button", { name: "New Photo" }));
-  fireEvent.press(screen.getByText("History"));
+  await fireEvent.press(screen.getByRole("button", { name: "New Photo" }));
+  await fireEvent.press(screen.getByText("History"));
   expect(await screen.findByText(item.question)).toBeOnTheScreen();
   expect(app.getPathname()).toBe("/history");
 });

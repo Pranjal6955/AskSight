@@ -123,49 +123,7 @@ async function send(
     headers["Content-Type"] = "application/json";
   }
 
-  if (isForm && init.body instanceof FormData) {
-    return sendMultipart(`${BASE_URL}${path}`, init, headers);
-  }
   return fetch(`${BASE_URL}${path}`, { ...init, headers });
-}
-
-function sendMultipart(
-  url: string,
-  init: JsonInit,
-  headers: Record<string, string>,
-): Promise<Response> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open(init.method ?? "POST", url, true);
-    for (const [name, value] of Object.entries(headers)) {
-      xhr.setRequestHeader(name, value);
-    }
-    xhr.onload = () => {
-      const responseHeaders = new Headers();
-      for (const line of xhr
-        .getAllResponseHeaders()
-        .trim()
-        .split(/[\r\n]+/)) {
-        const separator = line.indexOf(":");
-        if (separator > 0) {
-          responseHeaders.append(
-            line.slice(0, separator).trim(),
-            line.slice(separator + 1).trim(),
-          );
-        }
-      }
-      resolve(
-        new Response(xhr.responseText, {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          headers: responseHeaders,
-        }),
-      );
-    };
-    xhr.onerror = () => reject(new TypeError("Network request failed"));
-    xhr.onabort = () => reject(new Error("Upload was cancelled."));
-    xhr.send(init.body as FormData);
-  });
 }
 
 async function sendOk(

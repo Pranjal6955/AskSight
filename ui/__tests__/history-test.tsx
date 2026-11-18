@@ -105,7 +105,7 @@ describe("history list and detail", () => {
     expect(
       await screen.findByText("What does this sign say?"),
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Load More" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Load More" }));
 
     expect(
       await screen.findByText("What colour is the sign?"),
@@ -126,7 +126,7 @@ describe("history list and detail", () => {
     await renderHistory();
 
     expect(await screen.findByText("No questions yet")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Refresh" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Refresh" }));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
     expect(
       screen.getByRole("button", { name: "Ask your first question" }),
@@ -145,7 +145,7 @@ describe("history list and detail", () => {
     expect(
       await screen.findByText("The service is unavailable."),
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Try Again" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Try Again" }));
     expect(await screen.findByText("No questions yet")).toBeOnTheScreen();
   });
 
@@ -168,7 +168,7 @@ describe("history list and detail", () => {
       .mockResolvedValue(undefined);
     const app = await renderHistory();
 
-    fireEvent.press(
+    await fireEvent.press(
       await screen.findByRole("button", {
         name: /Question: What does this sign say/,
       }),
@@ -176,7 +176,7 @@ describe("history list and detail", () => {
     await screen.findByRole("button", {
       name: "Delete this question and its answer",
     });
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByRole("button", {
         name: "Delete this question and its answer",
       }),
@@ -184,7 +184,7 @@ describe("history list and detail", () => {
     expect(
       screen.getByText(/photo is also deleted if it was the last question/),
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Delete Question" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Delete Question" }));
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith("entry-1"));
     expect(await screen.findByText("No questions yet")).toBeOnTheScreen();
@@ -225,13 +225,13 @@ describe("delete all history", () => {
       .mockResolvedValue(undefined);
     await renderHistory("/settings");
 
-    fireEvent.press(screen.getByRole("button", { name: "Delete All History" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Delete All History" }));
     expect(
       screen.getByText(
         "This deletes every question, answer, and photo in your history. It cannot be undone.",
       ),
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Delete All" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Delete All" }));
 
     await waitFor(() => expect(remove).toHaveBeenCalled());
     expect(

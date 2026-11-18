@@ -17,7 +17,7 @@ const TOKENS = {
 };
 
 async function renderAuth() {
-  const view = renderHook(() => useAuth(), { wrapper: Providers });
+  const view = await renderHook(() => useAuth(), { wrapper: Providers });
   await waitFor(() => expect(view.result.current.authReady).toBe(true));
   return view;
 }
@@ -97,7 +97,7 @@ describe("session restore", () => {
       });
 
     const { result } = await renderAuth();
-    act(() => expire?.("Your session has expired. Please sign in again."));
+    await act(() => expire?.("Your session has expired. Please sign in again."));
 
     expect(result.current.user).toBeNull();
     expect(result.current.sessionNotice).toBe(
@@ -129,7 +129,7 @@ describe("sign in and out", () => {
     const { result } = await renderAuth();
     await act(() => result.current.signIn({ email: "a@b.c", password: "pw" }));
 
-    act(() => result.current.signOut());
+    await act(() => result.current.signOut());
 
     expect(result.current.user).toBeNull();
     expect(getAccessToken()).toBeNull();

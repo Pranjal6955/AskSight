@@ -74,7 +74,7 @@ describe("camera permission handoff", () => {
         "AskSight needs the camera to see what you want to ask about.",
       ),
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Continue" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Continue" }));
     await waitFor(() => expect(mockRequestCameraPermission).toHaveBeenCalled());
   });
 });
@@ -124,9 +124,9 @@ describe("photo library and upload flow", () => {
     jest.spyOn(api, "uploadImage").mockImplementation(fakeApi.uploadImage);
     const router = await renderRouter(routes, { initialUrl: photoUrl });
 
-    fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
     expect(await screen.findByText("The network is down.")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Try Again" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Try Again" }));
 
     await waitFor(() => expect(router.getPathname()).toBe("/ask"));
     expect(fakeApi.uploadImage).toHaveBeenCalledTimes(2);
@@ -141,7 +141,7 @@ describe("photo library and upload flow", () => {
     jest.spyOn(api, "uploadImage").mockImplementation(fakeApi.uploadImage);
     await renderRouter(routes, { initialUrl: photoUrl });
 
-    fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Use Photo" }));
 
     expect(
       await screen.findByText("That image is too large."),

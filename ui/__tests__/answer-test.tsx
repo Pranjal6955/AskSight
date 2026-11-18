@@ -72,7 +72,7 @@ describe("answer playback", () => {
     );
 
     expect(screen.getByText("It says Exit.")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
 
     await waitFor(() =>
       expect(mockPlaySpeech).toHaveBeenCalledWith(
@@ -82,7 +82,7 @@ describe("answer playback", () => {
     );
     expect(mockFileWrite).toHaveBeenCalledWith(new Uint8Array(bytes));
     expect(app.getPathname()).toBe("/answer");
-    app.unmount();
+    await app.unmount();
     expect(mockStopSpeech).toHaveBeenCalled();
     expect(mockFileDelete).toHaveBeenCalled();
   });
@@ -143,7 +143,7 @@ describe("answer playback", () => {
       "/answer?image_id=img&question=What%20is%20this&answer=A%20wooden%20chair.",
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
 
     expect(
       await screen.findByText(

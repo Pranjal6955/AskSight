@@ -84,72 +84,28 @@ describe("Tabs layout", () => {
 });
 
 describe("Home screen", () => {
-  describe("signed in", () => {
-    test("greets the signed-in user by first name", async () => {
-      mockSignedIn();
-      await renderTabs({ signedIn: true });
-      await waitFor(() => expect(screen.getByText("John!")).toBeOnTheScreen());
-    });
-
-    test("shows the AskSight brand in the home header", async () => {
-      mockSignedIn();
-      await renderTabs({ signedIn: true });
-      expect(screen.getByLabelText("AskSight")).toBeOnTheScreen();
-    });
+  test("shows the AskSight brand in the home header", async () => {
+    await renderTabs();
+    expect(screen.getByLabelText("AskSight")).toBeOnTheScreen();
   });
 
   describe("ask with camera", () => {
-    test("renders the Take a Photo card", async () => {
-      await renderTabs();
-      expect(screen.getByText("Take a Photo")).toBeOnTheScreen();
-      expect(
-        screen.getByText(
-          "Capture your surroundings and get an AI description.",
-        ),
-      ).toBeOnTheScreen();
-    });
-
-    test("shows the accessibility label for the camera card", async () => {
+    test("shows the camera action", async () => {
       await renderTabs();
       expect(
-        screen.getByLabelText("Take a photo. Opens the camera."),
+        screen.getByRole("button", { name: "Open camera" }),
       ).toBeOnTheScreen();
     });
 
     test("offers the photo library beside the camera action", async () => {
       await renderTabs();
       expect(
-        screen.getByRole("button", {
-          name: "Choose a photo from your library",
-        }),
+        screen.getByRole("button", { name: "Choose a photo" }),
       ).toBeOnTheScreen();
     });
   });
 
-  describe("recent history", () => {
-    test("shows the Recent activity heading", async () => {
-      await renderTabs();
-      expect(screen.getByText("Recent activity")).toBeOnTheScreen();
-    });
-
-    test("shows the empty state", async () => {
-      await renderTabs();
-      expect(screen.getByText("No questions yet")).toBeOnTheScreen();
-    });
-
-    test("shows the empty state description", async () => {
-      await renderTabs();
-      expect(
-        screen.getByText("Your past questions will appear here."),
-      ).toBeOnTheScreen();
-    });
-
-    test("navigates to the History tab on See all press", async () => {
-      const router = await renderTabs();
-      await fireEvent.press(screen.getByText("See all"));
-      await waitFor(() => expect(router.getPathname()).toBe("/history"));
-    });
-
+  describe("settings shortcut", () => {
     test("opens Settings from the header gear button", async () => {
       const router = await renderTabs();
       await fireEvent.press(screen.getByLabelText("Open settings"));

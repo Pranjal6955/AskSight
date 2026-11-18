@@ -14,25 +14,25 @@ import { StatusBanner } from "../src/components/StatusBanner";
 afterEach(() => jest.restoreAllMocks());
 
 describe("ScreenHeader", () => {
-  test("renders the title as a heading with a subtitle", () => {
-    render(<ScreenHeader title="History" subtitle="Your past questions" />);
+  test("renders the title as a heading with a subtitle", async () => {
+    await render(<ScreenHeader title="History" subtitle="Your past questions" />);
 
     expect(screen.getByRole("header")).toHaveTextContent("History");
     expect(screen.getByText("Your past questions")).toBeOnTheScreen();
   });
 
-  test("shows a labelled back action when supplied", () => {
+  test("shows a labelled back action when supplied", async () => {
     const onBack = jest.fn();
-    render(<ScreenHeader title="History" onBack={onBack} />);
-    fireEvent.press(screen.getByRole("button", { name: "Go back" }));
+    await render(<ScreenHeader title="History" onBack={onBack} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Go back" }));
     expect(onBack).toHaveBeenCalled();
   });
 });
 
 describe("ActionCard", () => {
-  test("exposes one descriptive button and fires on press", () => {
+  test("exposes one descriptive button and fires on press", async () => {
     const onPress = jest.fn();
-    render(
+    await render(
       <ActionCard
         title="Take a photo"
         description="Ask about what is around you"
@@ -41,7 +41,7 @@ describe("ActionCard", () => {
       />,
     );
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByRole("button", {
         name: "Take a photo. Ask about what is around you",
       }),
@@ -50,8 +50,8 @@ describe("ActionCard", () => {
     expect(onPress).toHaveBeenCalled();
   });
 
-  test("is disabled when asked", () => {
-    render(
+  test("is disabled when asked", async () => {
+    await render(
       <ActionCard
         title="Take a photo"
         icon="camera-outline"
@@ -65,30 +65,32 @@ describe("ActionCard", () => {
 });
 
 describe("StatusBanner", () => {
-  test("announces errors assertively with an alert role", () => {
-    render(<StatusBanner tone="error" message="Couldn't save that." />);
+  test("announces errors assertively with an alert role", async () => {
+    await render(<StatusBanner tone="error" message="Couldn't save that." />);
 
     const alert = screen.getByRole("alert");
     expect(screen.getByText("Couldn't save that.")).toBeOnTheScreen();
     expect(alert).toHaveProp("accessibilityLiveRegion", "assertive");
   });
 
-  test("renders a warning with an icon and readable text", () => {
-    render(<StatusBanner tone="warning" message="Check this photo." />);
+  test("renders a warning with an icon and readable text", async () => {
+    await render(<StatusBanner tone="warning" message="Check this photo." />);
     expect(screen.getByText("Check this photo.")).toBeOnTheScreen();
     expect(
-      screen.UNSAFE_getByProps({ accessibilityLiveRegion: "polite" }).props
-        .accessibilityLiveRegion,
-    ).toBe("polite");
+      screen.container.queryAll(
+        (element) => element.props.accessibilityLiveRegion === "polite",
+      ),
+    ).toHaveLength(1);
   });
 
-  test("announces successes politely", () => {
-    render(<StatusBanner tone="success" message="Saved." />);
+  test("announces successes politely", async () => {
+    await render(<StatusBanner tone="success" message="Saved." />);
     expect(screen.getByText("Saved.")).toBeOnTheScreen();
     expect(
-      screen.UNSAFE_getByProps({ accessibilityLiveRegion: "polite" }).props
-        .accessibilityLiveRegion,
-    ).toBe("polite");
+      screen.container.queryAll(
+        (element) => element.props.accessibilityLiveRegion === "polite",
+      ),
+    ).toHaveLength(1);
   });
 });
 
@@ -99,8 +101,8 @@ describe("MicButton", () => {
     ["processing", "Processing", false, true],
   ] as const)(
     "exposes %s state accessibly",
-    (state, label, selected, disabled) => {
-      render(<MicButton state={state} onPress={jest.fn()} />);
+    async (state, label, selected, disabled) => {
+      await render(<MicButton state={state} onPress={jest.fn()} />);
       expect(screen.getByRole("button", { name: label })).toHaveProp(
         "accessibilityState",
         expect.objectContaining({ selected, disabled }),
@@ -110,9 +112,9 @@ describe("MicButton", () => {
 });
 
 describe("AnswerBlock", () => {
-  test("renders answer, playback label and verify note", () => {
+  test("renders answer, playback label and verify note", async () => {
     const onPlaybackPress = jest.fn();
-    render(
+    await render(
       <AnswerBlock
         question="What does the sign say?"
         answer="The sign says Main Street."
@@ -120,14 +122,14 @@ describe("AnswerBlock", () => {
         onPlaybackPress={onPlaybackPress}
       />,
     );
-    fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Listen Again" }));
     expect(screen.getByText("The sign says Main Street.")).toBeOnTheScreen();
     expect(screen.getByText(/Answers can be wrong/)).toBeOnTheScreen();
     expect(onPlaybackPress).toHaveBeenCalled();
   });
 
-  test("changes the playback label while speaking", () => {
-    render(
+  test("changes the playback label while speaking", async () => {
+    await render(
       <AnswerBlock
         question="What is this?"
         answer="A cup."
@@ -143,9 +145,9 @@ describe("AnswerBlock", () => {
 });
 
 describe("HistoryRow", () => {
-  test("exposes the complete question, answer and date as one button", () => {
+  test("exposes the complete question, answer and date as one button", async () => {
     const onPress = jest.fn();
-    render(
+    await render(
       <HistoryRow
         question="What does this sign say?"
         answer="It says Main Street."
@@ -161,35 +163,35 @@ describe("HistoryRow", () => {
       "Answer: It says Main Street.",
     );
     expect(row.props.accessibilityLabel).toContain("Asked Today at");
-    fireEvent.press(row);
+    await fireEvent.press(row);
     expect(onPress).toHaveBeenCalled();
   });
 });
 
 describe("SecondaryButton", () => {
-  test("reports loading and blocks presses", () => {
+  test("reports loading and blocks presses", async () => {
     const onPress = jest.fn();
-    render(<SecondaryButton label="Cancel" loading onPress={onPress} />);
+    await render(<SecondaryButton label="Cancel" loading onPress={onPress} />);
 
     const button = screen.getByRole("button", { name: "Please wait…" });
     expect(button).toBeDisabled();
-    fireEvent.press(button);
+    await fireEvent.press(button);
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  test("fires when enabled", () => {
+  test("fires when enabled", async () => {
     const onPress = jest.fn();
-    render(<SecondaryButton label="Cancel" onPress={onPress} />);
-    fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    await render(<SecondaryButton label="Cancel" onPress={onPress} />);
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
     expect(onPress).toHaveBeenCalled();
   });
 });
 
 describe("ConfirmDialog", () => {
-  test("calls confirm and cancel from the visible dialog", () => {
+  test("calls confirm and cancel from the visible dialog", async () => {
     const onConfirm = jest.fn();
     const onCancel = jest.fn();
-    render(
+    await render(
       <ConfirmDialog
         visible
         title="Delete all history?"
@@ -202,8 +204,8 @@ describe("ConfirmDialog", () => {
     );
 
     expect(screen.getByText("This cannot be undone.")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Delete" }));
-    fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Delete" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
 
     expect(onConfirm).toHaveBeenCalled();
     expect(onCancel).toHaveBeenCalled();
@@ -211,11 +213,11 @@ describe("ConfirmDialog", () => {
 });
 
 describe("ProgressAnnouncer", () => {
-  test("announces start, the delayed wait and completion", () => {
+  test("announces start, the delayed wait and completion", async () => {
     jest.useFakeTimers();
     const spoken = jest.spyOn(a11y, "announce").mockImplementation(() => {});
 
-    const { rerender } = render(
+    const { rerender } = await render(
       <ProgressAnnouncer
         working
         startMessage="Uploading photo."
@@ -224,12 +226,12 @@ describe("ProgressAnnouncer", () => {
       />,
     );
     expect(spoken).toHaveBeenCalledWith("Uploading photo.", { queue: true });
-    act(() => jest.advanceTimersByTime(8000));
+    await act(() => jest.advanceTimersByTime(8000));
     expect(spoken).toHaveBeenLastCalledWith("Still uploading.", {
       queue: true,
     });
 
-    rerender(
+    await rerender(
       <ProgressAnnouncer
         working={false}
         startMessage="Uploading photo."

@@ -7,8 +7,6 @@ import {
 
 import * as api from "../src/lib/api";
 import AskScreen from "../src/app/ask";
-import TranscriptScreen from "../src/app/transcript";
-import AnswerScreen from "../src/app/answer";
 import { Providers } from "../test-utils";
 
 const mockStopRecording = jest.fn();
@@ -45,16 +43,6 @@ function renderFlow(initialUrl: string) {
           <AskScreen />
         </Providers>
       ),
-      transcript: () => (
-        <Providers>
-          <TranscriptScreen />
-        </Providers>
-      ),
-      answer: () => (
-        <Providers>
-          <AnswerScreen />
-        </Providers>
-      ),
     },
     { initialUrl },
   );
@@ -63,7 +51,7 @@ function renderFlow(initialUrl: string) {
 afterEach(() => jest.restoreAllMocks());
 
 describe("ask flow", () => {
-  test("records, transcribes, reviews, and submits the confirmed question", async () => {
+  test("records, transcribes, and answers in the chat", async () => {
     const audioFile = {
       uri: "file:///question.m4a",
       name: "asksight-question.m4a",
@@ -84,25 +72,22 @@ describe("ask flow", () => {
       model_version: "test",
       created_at: "2026-11-15T00:00:00Z",
     });
-    const router = await renderFlow(
+    await renderFlow(
       "/ask?image_id=image-1&photo_uri=file%3A%2F%2F%2Fphoto.jpg",
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
-    await waitFor(() => expect(router.getPathname()).toBe("/transcript"));
-    expect(transcribe).toHaveBeenCalledWith(audioFile);
-    expect(screen.getByLabelText("Edit your question")).toHaveDisplayValue(
-      "What does the label say?",
-    );
+    await fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
 
-    fireEvent.press(screen.getByRole("button", { name: "Ask This Question" }));
-    await waitFor(() => expect(router.getPathname()).toBe("/answer"));
+    expect(transcribe).toHaveBeenCalledWith(audioFile);
     expect(ask).toHaveBeenCalledWith(
       "image-1",
       "What does the label say?",
       expect.any(AbortSignal),
     );
     expect(screen.getByText("It says rice.")).toBeOnTheScreen();
+    expect(
+      screen.getByLabelText("Ask a follow-up question"),
+    ).toHaveDisplayValue("");
   });
 
   test("keeps the typed path available when transcription fails", async () => {
@@ -131,29 +116,30 @@ describe("ask flow", () => {
       model_version: "test",
       created_at: "2026-11-15T00:00:00Z",
     });
-    const router = await renderFlow("/ask?image_id=image-2");
+    await renderFlow("/ask?image_id=image-2");
 
-    fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Tap to stop" }));
     expect(
       await screen.findByText(
         "Speech is not available right now. Please try again later.",
       ),
     ).toBeOnTheScreen();
-    fireEvent.changeText(
-      screen.getByLabelText("Your question"),
+    await fireEvent.changeText(
+      screen.getByLabelText("Ask a follow-up question"),
       "What is in the photo?",
     );
-    fireEvent.press(screen.getByRole("button", { name: "Ask" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Send question" }));
 
-    await waitFor(() => expect(router.getPathname()).toBe("/answer"));
     expect(ask).toHaveBeenCalledWith(
       "image-2",
       "What is in the photo?",
       expect.any(AbortSignal),
     );
+    expect(screen.getByText("A blue mug.")).toBeOnTheScreen();
   });
 
-  test("shows ask failures and leaves the transcript available for retry", async () => {
+  test("shows ask failures and keeps the question available for retry", async () => {
+    mockRecordingActive = false;
     const ask = jest
       .spyOn(api, "ask")
       .mockRejectedValue(
@@ -163,9 +149,9 @@ describe("ask flow", () => {
           null,
         ),
       );
-    await renderFlow("/transcript?image_id=image-3&transcript=Read%20this");
+    await renderFlow("/ask?image_id=image-3&question=Read%20this");
 
-    fireEvent.press(screen.getByRole("button", { name: "Ask This Question" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Send question" }));
 
     expect(
       await screen.findByText(
@@ -177,9 +163,9 @@ describe("ask flow", () => {
       "Read this",
       expect.any(AbortSignal),
     );
-    expect(screen.getByLabelText("Edit your question")).toHaveDisplayValue(
-      "Read this",
-    );
+    expect(
+      screen.getByLabelText("Ask a follow-up question"),
+    ).toHaveDisplayValue("Read this");
   });
 
   test("cancels the pending ask without showing a failed-answer message", async () => {
@@ -196,19 +182,22 @@ describe("ask flow", () => {
         });
       });
     await renderFlow("/ask?image_id=image-4");
-    fireEvent.changeText(
-      screen.getByLabelText("Your question"),
+    await fireEvent.changeText(
+      screen.getByLabelText("Ask a follow-up question"),
       "What is this?",
     );
-    fireEvent.press(screen.getByRole("button", { name: "Ask" }));
+    const submit = fireEvent.press(
+      screen.getByRole("button", { name: "Send question" }),
+    );
 
     expect(await screen.findByText("Looking at your photo…")).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => expect(signal?.aborted).toBe(true));
+    await submit;
     expect(screen.queryByText(/couldn't answer/i)).not.toBeOnTheScreen();
-    expect(screen.getByLabelText("Your question")).toHaveDisplayValue(
-      "What is this?",
-    );
+    expect(
+      screen.getByLabelText("Ask a follow-up question"),
+    ).toHaveDisplayValue("What is this?");
   });
 });

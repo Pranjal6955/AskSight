@@ -100,7 +100,7 @@ describe("Signup screen", () => {
 
     test("toggles to Hide password on tap", async () => {
       await renderSignup();
-      fireEvent.press(screen.getByLabelText("Show password"));
+      await fireEvent.press(screen.getByLabelText("Show password"));
       expect(screen.getByLabelText("Hide password")).toBeOnTheScreen();
       expect(screen.queryByLabelText("Show password")).toBeNull();
     });
@@ -121,12 +121,12 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "short");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "short");
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(
@@ -157,12 +157,12 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "12345678");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "12345678");
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(
@@ -194,12 +194,12 @@ describe("Signup screen", () => {
 
       const router = await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(api.signup).toHaveBeenCalledWith({
@@ -239,12 +239,12 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "  John Doe  ");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "  John Doe  ");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "  john@example.com  ",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(signupSpy).toHaveBeenCalledWith({
@@ -256,7 +256,12 @@ describe("Signup screen", () => {
 
     test("shows loading state while creating the account", async () => {
       const api = require("../src/lib/api");
-      jest.spyOn(api, "signup").mockReturnValue(new Promise(() => {}));
+      jest.spyOn(api, "signup").mockResolvedValue({
+        id: "1",
+        name: "John Doe",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
       jest.spyOn(api, "login").mockResolvedValue({
         access_token: "t",
         refresh_token: "r",
@@ -271,17 +276,15 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
-      fireEvent.press(screen.getByText("Create account"));
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Create account"));
 
-      expect(
-        await screen.findByText("Creating your account…"),
-      ).toBeOnTheScreen();
+      expect(screen.getByText("Creating your account…")).toBeOnTheScreen();
       expect(
         screen.getByRole("button", { name: "Creating your account…" }).props
           .className,
@@ -293,24 +296,36 @@ describe("Signup screen", () => {
 
     test("submits only once when the keyboard submits during loading", async () => {
       const api = require("../src/lib/api");
-      const signupSpy = jest
-        .spyOn(api, "signup")
-        .mockReturnValue(new Promise(() => {}));
+      const signupSpy = jest.spyOn(api, "signup").mockResolvedValue({
+        id: "1",
+        name: "John Doe",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
+      jest.spyOn(api, "me").mockResolvedValue({
+        id: "1",
+        name: "John Doe",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
-      fireEvent.press(screen.getByText("Create account"));
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Create account"));
 
-      expect(
-        await screen.findByText("Creating your account…"),
-      ).toBeOnTheScreen();
-      fireEvent(screen.getByLabelText("Password"), "submitEditing");
+      expect(screen.getByText("Creating your account…")).toBeOnTheScreen();
+      await fireEvent(screen.getByLabelText("Password"), "submitEditing");
 
       expect(signupSpy).toHaveBeenCalledTimes(1);
     });
@@ -325,12 +340,12 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
       const errorMessage = await screen.findByText(
@@ -362,17 +377,17 @@ describe("Signup screen", () => {
 
       const router = await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
       await screen.findByText("Your account is ready. Opening AskSight…");
 
-      fireEvent.press(screen.getByText("Sign in"));
+      await fireEvent.press(screen.getByText("Sign in"));
       expect(router.getPathname()).toBe("/signup");
 
       await act(async () => {
@@ -395,12 +410,12 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(
@@ -416,12 +431,12 @@ describe("Signup screen", () => {
 
       await renderSignup();
 
-      fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
-      fireEvent.changeText(
+      await fireEvent.changeText(screen.getByLabelText("Full name"), "John Doe");
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Create account"));
 
       expect(

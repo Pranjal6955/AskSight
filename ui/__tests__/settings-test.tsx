@@ -32,8 +32,8 @@ function wrapper({ children }: { children: ReactNode }) {
 afterEach(() => jest.restoreAllMocks());
 
 describe("settings", () => {
-  test("starts with the documented defaults", () => {
-    const { result } = renderHook(() => useSettings(), { wrapper });
+  test("starts with the documented defaults", async () => {
+    const { result } = await renderHook(() => useSettings(), { wrapper });
     expect(result.current.settings).toEqual(DEFAULT_SETTINGS);
   });
 
@@ -43,7 +43,7 @@ describe("settings", () => {
       JSON.stringify({ speechRate: 99, textScale: "huge" }),
     );
 
-    const { result } = renderHook(() => useSettings(), { wrapper });
+    const { result } = await renderHook(() => useSettings(), { wrapper });
 
     await waitFor(() => expect(result.current.settings.speechRate).toBe(1));
     expect(result.current.settings.textScale).toBe("system");
@@ -53,7 +53,7 @@ describe("settings", () => {
   test("falls back to defaults when stored JSON is corrupt", async () => {
     await SecureStore.setItemAsync(KEY, "not json");
 
-    const { result } = renderHook(() => useSettings(), { wrapper });
+    const { result } = await renderHook(() => useSettings(), { wrapper });
 
     await waitFor(() =>
       expect(SecureStore.getItemAsync).toHaveBeenCalledWith(KEY),
@@ -62,9 +62,9 @@ describe("settings", () => {
   });
 
   test("persists a change", async () => {
-    const { result } = renderHook(() => useSettings(), { wrapper });
+    const { result } = await renderHook(() => useSettings(), { wrapper });
 
-    act(() => result.current.update("textScale", "large"));
+    await act(() => result.current.update("textScale", "large"));
 
     expect(result.current.settings.textScale).toBe("large");
     await waitFor(async () =>
@@ -82,30 +82,30 @@ describe("useTextScale", () => {
       JSON.stringify({ ...DEFAULT_SETTINGS, textScale: "xlarge" }),
     );
 
-    const { result } = renderHook(() => useTextScale(), { wrapper });
+    const { result } = await renderHook(() => useTextScale(), { wrapper });
 
     await waitFor(() => expect(result.current).toBe(1.3));
   });
 });
 
 describe("useAutoSpeak", () => {
-  test("requires the setting, a finished screen-reader check, and no screen reader", () => {
+  test("requires the setting, a finished screen-reader check, and no screen reader", async () => {
     const screenReader = jest.spyOn(useA11y, "useScreenReader");
 
     screenReader.mockReturnValue(null);
-    expect(renderHook(() => useAutoSpeak(), { wrapper }).result.current).toBe(
-      false,
-    );
+    expect(
+      (await renderHook(() => useAutoSpeak(), { wrapper })).result.current,
+    ).toBe(false);
 
     screenReader.mockReturnValue(true);
-    expect(renderHook(() => useAutoSpeak(), { wrapper }).result.current).toBe(
-      false,
-    );
+    expect(
+      (await renderHook(() => useAutoSpeak(), { wrapper })).result.current,
+    ).toBe(false);
 
     screenReader.mockReturnValue(false);
-    expect(renderHook(() => useAutoSpeak(), { wrapper }).result.current).toBe(
-      true,
-    );
+    expect(
+      (await renderHook(() => useAutoSpeak(), { wrapper })).result.current,
+    ).toBe(true);
   });
 });
 
@@ -116,7 +116,7 @@ describe("AppText", () => {
       JSON.stringify({ ...DEFAULT_SETTINGS, textScale: "xlarge" }),
     );
 
-    render(
+    await render(
       <SettingsProvider>
         <AppText variant="body" testID="body">
           Hello
@@ -132,8 +132,8 @@ describe("AppText", () => {
     );
   });
 
-  test("uses the system scale by default", () => {
-    render(
+  test("uses the system scale by default", async () => {
+    await render(
       <SettingsProvider>
         <AppText variant="hero" testID="hero">
           Hello
@@ -151,13 +151,13 @@ describe("AppText", () => {
 describe("Settings text scale preview", () => {
   test("updates the sample immediately and announces the selected size", async () => {
     const spoken = jest.spyOn(a11y, "announce").mockImplementation(() => {});
-    render(
+    await render(
       <Providers>
         <SettingsScreen />
       </Providers>,
     );
 
-    fireEvent.press(screen.getByRole("radio", { name: "Extra large" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Extra large" }));
 
     expect(
       screen.getByText("You can change the text size any time."),
@@ -170,14 +170,14 @@ describe("Settings text scale preview", () => {
 
   test("changes speech speed and language and announces both choices", async () => {
     const spoken = jest.spyOn(a11y, "announce").mockImplementation(() => {});
-    render(
+    await render(
       <Providers>
         <SettingsScreen />
       </Providers>,
     );
 
-    fireEvent.press(screen.getByRole("radio", { name: "Fast" }));
-    fireEvent.press(screen.getByRole("radio", { name: "English (India)" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "Fast" }));
+    await fireEvent.press(screen.getByRole("radio", { name: "English (India)" }));
 
     await waitFor(async () => {
       expect(await SecureStore.getItemAsync(KEY)).toContain('"speechRate":1.2');
@@ -190,13 +190,13 @@ describe("Settings text scale preview", () => {
 
   test("persists and announces the automatic speech toggle", async () => {
     const spoken = jest.spyOn(a11y, "announce").mockImplementation(() => {});
-    render(
+    await render(
       <Providers>
         <SettingsScreen />
       </Providers>,
     );
 
-    fireEvent(
+    await fireEvent(
       screen.getByRole("switch", { name: "Speak answers automatically" }),
       "valueChange",
       false,
@@ -215,7 +215,7 @@ describe("Settings text scale preview", () => {
       KEY,
       JSON.stringify({ ...DEFAULT_SETTINGS, lastModelVersion: "mock-0.0.0" }),
     );
-    render(
+    await render(
       <Providers>
         <SettingsScreen />
       </Providers>,
@@ -244,13 +244,13 @@ describe("Settings text scale preview", () => {
       email: "john@example.com",
       createdAt: "2026-01-01T00:00:00Z",
     });
-    render(
+    await render(
       <SignedInProviders>
         <SettingsScreen />
       </SignedInProviders>,
     );
 
-    fireEvent.press(
+    await fireEvent.press(
       await screen.findByRole("button", { name: "Sign out of your account" }),
     );
     expect(
@@ -258,7 +258,7 @@ describe("Settings text scale preview", () => {
         "You will need to sign in again to use AskSight.",
       ),
     ).toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Stay Signed In" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Stay Signed In" }));
     expect(
       screen.queryByText("You will need to sign in again to use AskSight."),
     ).not.toBeOnTheScreen();
@@ -266,13 +266,13 @@ describe("Settings text scale preview", () => {
 
   test("opens the support link", async () => {
     const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
-    render(
+    await render(
       <Providers>
         <SettingsScreen />
       </Providers>,
     );
 
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByRole("link", { name: "AskSight support page" }),
     );
     await waitFor(() =>
@@ -289,14 +289,14 @@ describe("Settings text scale preview", () => {
       .mockRejectedValue(
         new api.ApiError("History could not be deleted.", 503, null),
       );
-    render(
+    await render(
       <Providers>
         <SettingsScreen />
       </Providers>,
     );
 
-    fireEvent.press(screen.getByRole("button", { name: "Delete All History" }));
-    fireEvent.press(screen.getByRole("button", { name: "Delete All" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Delete All History" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Delete All" }));
     expect(
       await screen.findByText("History could not be deleted."),
     ).toBeOnTheScreen();

@@ -49,7 +49,7 @@ afterEach(() => {
 
 describe("route guard", () => {
   test("sends a signed-out user to Login", async () => {
-    renderRouter(routes, { initialUrl: "/home" });
+    await renderRouter(routes, { initialUrl: "/home" });
 
     await waitFor(() =>
       expect(screen.getByText("Welcome back to AskSight")).toBeOnTheScreen(),
@@ -65,20 +65,24 @@ describe("route guard", () => {
     });
     jest.spyOn(api, "me").mockResolvedValue(TEST_USER);
 
-    renderRouter(routes, { initialUrl: "/login" });
+    await renderRouter(routes, { initialUrl: "/login" });
 
     await waitFor(() =>
       expect(screen.getByText("Before you start")).toBeOnTheScreen(),
     );
-    expect(screen.queryByText("John!")).not.toBeOnTheScreen();
+    expect(screen.queryByText("Choose a photo")).not.toBeOnTheScreen();
     expect(
       screen.getByText(/stored in your account until you delete them/),
     ).toBeOnTheScreen();
     expect(screen.queryByText(/sent to Sarvam/)).not.toBeOnTheScreen();
-    fireEvent.press(screen.getByRole("button", { name: "Read More" }));
+    await fireEvent.press(screen.getByRole("button", { name: "Read More" }));
     expect(await screen.findByText(/sent to Sarvam/)).toBeOnTheScreen();
 
-    fireEvent.press(screen.getByRole("button", { name: "I Understand" }));
-    await waitFor(() => expect(screen.getByText("John!")).toBeOnTheScreen());
+    await fireEvent.press(screen.getByRole("button", { name: "I Understand" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Choose a photo" }),
+      ).toBeOnTheScreen(),
+    );
   });
 });
