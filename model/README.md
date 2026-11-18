@@ -1,5 +1,7 @@
 # AskSight Model (Track B)
 
+Model quality work is tracked in [MODEL_QUALITY_TASK.md](./MODEL_QUALITY_TASK.md).
+
 LLaVA-style visual question answering: a frozen CLIP vision encoder, a small
 trainable projection connector, and a frozen instruction-tuned language model.
 Only the connector is trained; a checkpoint is ~14 MB plus its config.
@@ -240,9 +242,10 @@ numbers are noise, and the 263-question `v0.1-colab` run is indicative but small
 
 ## Prompt
 
-The default system prompt asks for **English, one word or a short phrase**.
-Measured on the smoke checkpoint against the held-out split
-(`experiment_prompts.py`, 30 samples):
+The current default asks for clear English in one or two short sentences,
+grounded in visible details and suitable for screen-reader playback. The
+prompt comparison below tested older short-answer prompts on the smoke
+checkpoint; it does not measure the current conversational prompt:
 
 | prompt | VQA accuracy | answers with non-ASCII characters |
 |---|---|---|
@@ -250,11 +253,9 @@ Measured on the smoke checkpoint against the held-out split
 | **English, short phrase** | **0.200** | 5/30 |
 | English, one short sentence | 0.122 | 7/30 |
 
-Two reasons: VQA accuracy rewards a bare answer over a sentence, and the
-English requirement matters because Qwen2.5 is natively bilingual and will
-answer in Chinese for an English question — which the English-only TTS layer
-would then read out badly. Re-run `experiment_prompts.py` against a real
-checkpoint to confirm the ordering holds.
+The checkpoint's old prompt favored short VQA benchmark answers, but the app
+needs useful spoken responses. Re-run `experiment_prompts.py` to measure the
+current prompt against a release checkpoint before making accuracy claims.
 
 ## Inference service (B5)
 

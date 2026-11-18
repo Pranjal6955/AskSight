@@ -11,12 +11,11 @@ from asksight_model.config import (
 )
 
 
-def test_default_prompt_requires_english_and_short_answers():
-    # The mobile TTS layer speaks English only, and VQA accuracy rewards a
-    # bare answer over a sentence. Both break if this prompt drifts.
+def test_default_prompt_requires_english_and_clear_short_sentences():
+    # The mobile TTS layer speaks English only; answers should be useful aloud.
     prompt = DEFAULT_SYSTEM_PROMPT.lower()
     assert "english" in prompt
-    assert "short phrase" in prompt
+    assert "short sentences" in prompt
 
 
 def test_default_config_uses_the_default_prompt():

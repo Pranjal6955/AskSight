@@ -5,6 +5,7 @@ import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 
 from app.api.images import GONE, owned_image
 from app.core import images as image_checks
@@ -53,8 +54,11 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
         service = get_inference_service()
     except RuntimeError as exc:
         # Model backend misconfigured or unloadable — infrastructure, not input.
+        # Log the technical cause; the caller gets the contract sentence.
+        logger.error("inference_unavailable request_id=%s error=%s", get_request_id(), exc)
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=MODEL_UNAVAILABLE,
         ) from exc
 
     try:
@@ -94,9 +98,16 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
             get_request_id(),
             record.id,
         )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=NOT_SAVED
-        ) from None
+        # Keep the usable inference result available to the caller. The answer
+        # was produced successfully; only history persistence failed.
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": NOT_SAVED,
+                "answer": answer,
+                "model_version": model_version,
+            },
+        )
     persist_ms = round((time.perf_counter() - persist_started) * 1000, 1)
 
     # Phase timings only — no question or answer text ever reaches the logs.

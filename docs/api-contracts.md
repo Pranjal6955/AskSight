@@ -76,6 +76,7 @@ Status codes used:
 | Code | Meaning |
 |---|---|
 | 200 / 201 | Success (`201` only on signup and image upload) |
+| 400 | Malformed pagination cursor on `GET /history` |
 | 401 | Missing, malformed, or expired token; wrong credentials |
 | 404 | Resource does not exist **or** belongs to another user |
 | 409 | Email already registered |
@@ -425,7 +426,8 @@ user (identical bodies, so ids cannot be probed); also **404**
 bytes are gone. **422** — blank or oversized question, or the model rejected
 the input (a sentence from the model path). **500** — the answer was produced
 but could not be saved to history (`"The answer could not be saved to
-history."`). **503** — the inference service is unavailable. **504** — the
+history."`). **503** — the inference service is unavailable
+(`"The model is unavailable right now. Please try again later."`). **504** — the
 model did not answer within **30 seconds**.
 
 The call persists the question, the answer, the image association, the

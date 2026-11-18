@@ -9,6 +9,7 @@ import {
 
 import LoginScreen from "../src/app/login";
 import { AuthProvider } from "../src/lib/auth";
+import { clearPendingPhoto, setPendingPhoto } from "../src/lib/pendingPhoto";
 
 function renderLogin() {
   return renderRouter(
@@ -20,12 +21,14 @@ function renderLogin() {
       ),
       signup: () => <Text>Signup</Text>,
       "(tabs)/home": () => <Text>Home</Text>,
+      "photo-preview": () => <Text>Photo preview</Text>,
     },
     { initialUrl: "/login" },
   );
 }
 
 describe("Login screen", () => {
+  afterEach(() => clearPendingPhoto());
   describe("rendering", () => {
     test("displays the brand logo", async () => {
       await renderLogin();
@@ -83,15 +86,15 @@ describe("Login screen", () => {
 
     test("toggles to Hide password on tap", async () => {
       await renderLogin();
-      fireEvent.press(screen.getByLabelText("Show password"));
+      await fireEvent.press(screen.getByLabelText("Show password"));
       expect(screen.getByLabelText("Hide password")).toBeOnTheScreen();
       expect(screen.queryByLabelText("Show password")).toBeNull();
     });
 
     test("toggles back to Show password on second tap", async () => {
       await renderLogin();
-      fireEvent.press(screen.getByLabelText("Show password"));
-      fireEvent.press(screen.getByLabelText("Hide password"));
+      await fireEvent.press(screen.getByLabelText("Show password"));
+      await fireEvent.press(screen.getByLabelText("Hide password"));
       expect(screen.getByLabelText("Show password")).toBeOnTheScreen();
     });
   });
@@ -107,9 +110,11 @@ describe("Login screen", () => {
   describe("sign in flow", () => {
     test("calls the API with trimmed email and redirects on success", async () => {
       const api = require("../src/lib/api");
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -119,11 +124,11 @@ describe("Login screen", () => {
 
       const router = await renderLogin();
 
-      fireEvent.changeText(
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "  john@example.com  ",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Sign in"));
 
       expect(api.login).toHaveBeenCalledWith({
@@ -140,11 +145,46 @@ describe("Login screen", () => {
       });
     });
 
+    test("returns to the selected photo after signing in again", async () => {
+      const api = require("../src/lib/api");
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
+      jest.spyOn(api, "me").mockResolvedValue({
+        id: "1",
+        name: "John Smith",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
+      setPendingPhoto({
+        uri: "file:///tmp/photo.jpg",
+        name: "photo.jpg",
+        type: "image/jpeg",
+      });
+
+      const router = await renderLogin();
+      await fireEvent.changeText(
+        screen.getByLabelText("Email address"),
+        "john@example.com",
+      );
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Sign in"));
+
+      await waitFor(() => expect(router.getPathname()).toBe("/photo-preview"), {
+        timeout: 3000,
+      });
+      expect(screen.getByText("Photo preview")).toBeOnTheScreen();
+    });
+
     test("ignores the secondary link during the success hold and still opens Home", async () => {
       const api = require("../src/lib/api");
-      jest
-        .spyOn(api, "login")
-        .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -154,16 +194,16 @@ describe("Login screen", () => {
 
       const router = await renderLogin();
 
-      fireEvent.changeText(
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Sign in"));
 
       await screen.findByText("You're signed in. Opening AskSight…");
 
-      fireEvent.press(screen.getByText("Create account"));
+      await fireEvent.press(screen.getByText("Create account"));
       expect(router.getPathname()).toBe("/login");
 
       await act(async () => {
@@ -174,7 +214,11 @@ describe("Login screen", () => {
 
     test("shows loading state while signing in", async () => {
       const api = require("../src/lib/api");
-      jest.spyOn(api, "login").mockReturnValue(new Promise(() => {}));
+      jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -183,15 +227,14 @@ describe("Login screen", () => {
       });
 
       await renderLogin();
-
-      fireEvent.changeText(
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
-      fireEvent.press(screen.getByText("Sign in"));
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Sign in"));
 
-      expect(await screen.findByText("Signing you in…")).toBeOnTheScreen();
+      expect(screen.getByText("Signing you in…")).toBeOnTheScreen();
       expect(
         screen.getByRole("button", { name: "Signing you in…" }).props.className,
       ).toContain("bg-warning");
@@ -202,21 +245,29 @@ describe("Login screen", () => {
 
     test("submits only once when the keyboard submits during loading", async () => {
       const api = require("../src/lib/api");
-      const loginSpy = jest
-        .spyOn(api, "login")
-        .mockReturnValue(new Promise(() => {}));
+      const loginSpy = jest.spyOn(api, "login").mockResolvedValue({
+        access_token: "t",
+        refresh_token: "r",
+        token_type: "bearer",
+      });
+      jest.spyOn(api, "me").mockResolvedValue({
+        id: "1",
+        name: "John Smith",
+        email: "john@example.com",
+        createdAt: "2026-01-01T00:00:00Z",
+      });
 
       await renderLogin();
 
-      fireEvent.changeText(
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
-      fireEvent.press(screen.getByText("Sign in"));
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.press(screen.getByText("Sign in"));
 
-      expect(await screen.findByText("Signing you in…")).toBeOnTheScreen();
-      fireEvent(screen.getByLabelText("Password"), "submitEditing");
+      expect(screen.getByText("Signing you in…")).toBeOnTheScreen();
+      await fireEvent(screen.getByLabelText("Password"), "submitEditing");
 
       expect(loginSpy).toHaveBeenCalledTimes(1);
     });
@@ -240,7 +291,11 @@ describe("Login screen", () => {
       const loginSpy = jest
         .spyOn(api, "login")
         .mockRejectedValueOnce(new Error("Invalid email or Password"))
-        .mockResolvedValueOnce({ access_token: "t", token_type: "bearer" });
+        .mockResolvedValueOnce({
+          access_token: "t",
+          refresh_token: "r",
+          token_type: "bearer",
+        });
       jest.spyOn(api, "me").mockResolvedValue({
         id: "1",
         name: "John Smith",
@@ -250,11 +305,11 @@ describe("Login screen", () => {
 
       await renderLogin();
 
-      fireEvent.changeText(
+      await fireEvent.changeText(
         screen.getByLabelText("Email address"),
         "john@example.com",
       );
-      fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
+      await fireEvent.changeText(screen.getByLabelText("Password"), "hunter2!");
       await fireEvent.press(screen.getByText("Sign in"));
 
       expect(
@@ -294,5 +349,26 @@ describe("Login screen", () => {
         ),
       ).toBeOnTheScreen();
     });
+  });
+});
+
+describe("Session notice", () => {
+  test("shows the reason when the session ended", async () => {
+    const api = require("../src/lib/api");
+    const holder: { expire?: (message: string) => void } = {};
+    jest.spyOn(api, "setSessionExpiredHandler").mockImplementation(((
+      handler: ((message: string) => void) | null,
+    ) => {
+      holder.expire = handler ?? undefined;
+    }) as never);
+
+    await renderLogin();
+    await act(async () => {
+      holder.expire?.("Your session has expired. Please sign in again.");
+    });
+
+    expect(
+      screen.getByText("Your session has expired. Please sign in again."),
+    ).toBeOnTheScreen();
   });
 });

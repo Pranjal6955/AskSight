@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Text } from "react-native";
 import {
   fireEvent,
@@ -11,7 +10,9 @@ import TabsLayout from "../src/app/(tabs)/_layout";
 import HistoryScreen from "../src/app/(tabs)/history";
 import HomeScreen from "../src/app/(tabs)/home";
 import SettingsScreen from "../src/app/(tabs)/settings";
-import { AuthProvider, useAuth } from "../src/lib/auth";
+import { AuthProvider } from "../src/lib/auth";
+import { SignedInProviders } from "../test-utils";
+import * as api from "../src/lib/api";
 
 const USER = {
   id: "1",
@@ -22,29 +23,27 @@ const USER = {
 
 function mockSignedIn() {
   const api = require("../src/lib/api");
-  jest
-    .spyOn(api, "login")
-    .mockResolvedValue({ access_token: "t", token_type: "bearer" });
+  jest.spyOn(api, "login").mockResolvedValue({
+    access_token: "t",
+    refresh_token: "r",
+    token_type: "bearer",
+  });
   jest.spyOn(api, "me").mockResolvedValue(USER);
-}
-
-function SignInOnMount() {
-  const { signIn } = useAuth();
-  useEffect(() => {
-    signIn({ email: USER.email, password: "hunter2!" });
-  }, [signIn]);
-  return null;
 }
 
 function renderTabs({ signedIn = false } = {}) {
   return renderRouter(
     {
-      "(tabs)/_layout": () => (
-        <AuthProvider>
-          {signedIn ? <SignInOnMount /> : null}
-          <TabsLayout />
-        </AuthProvider>
-      ),
+      "(tabs)/_layout": () =>
+        signedIn ? (
+          <SignedInProviders>
+            <TabsLayout />
+          </SignedInProviders>
+        ) : (
+          <AuthProvider>
+            <TabsLayout />
+          </AuthProvider>
+        ),
       "(tabs)/home": HomeScreen,
       "(tabs)/history": HistoryScreen,
       "(tabs)/settings": SettingsScreen,
@@ -85,65 +84,28 @@ describe("Tabs layout", () => {
 });
 
 describe("Home screen", () => {
-  describe("signed in", () => {
-    test("greets the signed-in user by first name", async () => {
-      mockSignedIn();
-      await renderTabs({ signedIn: true });
-      await waitFor(() => expect(screen.getByText("John!")).toBeOnTheScreen());
-    });
-
-    test("shows the AskSight brand in the home header", async () => {
-      mockSignedIn();
-      await renderTabs({ signedIn: true });
-      expect(screen.getByLabelText("AskSight")).toBeOnTheScreen();
-    });
+  test("shows the AskSight brand in the home header", async () => {
+    await renderTabs();
+    expect(screen.getByLabelText("AskSight")).toBeOnTheScreen();
   });
 
   describe("ask with camera", () => {
-    test("renders the Take a Photo card", async () => {
+    test("shows the camera action", async () => {
       await renderTabs();
-      expect(screen.getByText("Take a Photo")).toBeOnTheScreen();
       expect(
-        screen.getByText(
-          "Capture your surroundings and get an AI description.",
-        ),
+        screen.getByRole("button", { name: "Open camera" }),
       ).toBeOnTheScreen();
     });
 
-    test("shows the accessibility label for the camera card", async () => {
+    test("offers the photo library beside the camera action", async () => {
       await renderTabs();
       expect(
-        screen.getByLabelText(
-          "Ask with Camera. Take a photo and get an AI description of your surroundings",
-        ),
+        screen.getByRole("button", { name: "Choose a photo" }),
       ).toBeOnTheScreen();
     });
   });
 
-  describe("recent history", () => {
-    test("shows the Recent activity heading", async () => {
-      await renderTabs();
-      expect(screen.getByText("Recent activity")).toBeOnTheScreen();
-    });
-
-    test("shows the empty state", async () => {
-      await renderTabs();
-      expect(screen.getByText("No questions yet")).toBeOnTheScreen();
-    });
-
-    test("shows the empty state description", async () => {
-      await renderTabs();
-      expect(
-        screen.getByText("Your past questions will appear here."),
-      ).toBeOnTheScreen();
-    });
-
-    test("navigates to the History tab on See all press", async () => {
-      const router = await renderTabs();
-      await fireEvent.press(screen.getByText("See all"));
-      await waitFor(() => expect(router.getPathname()).toBe("/history"));
-    });
-
+  describe("settings shortcut", () => {
     test("opens Settings from the header gear button", async () => {
       const router = await renderTabs();
       await fireEvent.press(screen.getByLabelText("Open settings"));
@@ -153,6 +115,16 @@ describe("Home screen", () => {
 });
 
 describe("History screen", () => {
+  beforeEach(() => {
+    jest.spyOn(api, "listHistory").mockResolvedValue({
+      items: [],
+      next_cursor: null,
+      has_more: false,
+    });
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
   test("shows the History heading", async () => {
     await renderTabs();
     await fireEvent.press(screen.getByText("History"));
@@ -172,16 +144,6 @@ describe("History screen", () => {
     await fireEvent.press(screen.getByText("History"));
     expect(
       await screen.findByText("Your past questions will appear here."),
-    ).toBeOnTheScreen();
-  });
-
-  test("shows the coming soon note", async () => {
-    await renderTabs();
-    await fireEvent.press(screen.getByText("History"));
-    expect(
-      await screen.findByText(
-        "Your question history will be available when saved sessions are supported.",
-      ),
     ).toBeOnTheScreen();
   });
 
@@ -207,7 +169,7 @@ describe("Settings screen", () => {
       await renderTabs();
       await fireEvent.press(screen.getByText("Settings"));
       expect(
-        await screen.findByText("Manage your AskSight account."),
+        await screen.findByText("Manage how AskSight reads and speaks."),
       ).toBeOnTheScreen();
     });
 
@@ -233,9 +195,11 @@ describe("Settings screen", () => {
       mockSignedIn();
       await renderTabs({ signedIn: true });
       await fireEvent.press(screen.getByText("Settings"));
-      await waitFor(() =>
-        expect(screen.getByText("John Smith")).toBeOnTheScreen(),
-      );
+      expect(
+        await screen.findByLabelText(
+          "Signed in as John Smith, john@example.com",
+        ),
+      ).toBeOnTheScreen();
       expect(screen.getByText("john@example.com")).toBeOnTheScreen();
     });
 
@@ -243,7 +207,11 @@ describe("Settings screen", () => {
       mockSignedIn();
       await renderTabs({ signedIn: true });
       await fireEvent.press(screen.getByText("Settings"));
-      await waitFor(() => expect(screen.getByText("JS")).toBeOnTheScreen());
+      expect(
+        await screen.findByLabelText(
+          "Signed in as John Smith, john@example.com",
+        ),
+      ).toBeOnTheScreen();
     });
 
     test("enables the Sign out button when signed in", async () => {
@@ -258,10 +226,13 @@ describe("Settings screen", () => {
       mockSignedIn();
       const router = await renderTabs({ signedIn: true });
       await fireEvent.press(screen.getByText("Settings"));
-      await waitFor(() =>
-        expect(screen.getByText("John Smith")).toBeOnTheScreen(),
-      );
+      expect(
+        await screen.findByLabelText(
+          "Signed in as John Smith, john@example.com",
+        ),
+      ).toBeOnTheScreen();
       await fireEvent.press(screen.getByLabelText("Sign out of your account"));
+      await fireEvent.press(await screen.findByText("Sign Out"));
       await waitFor(() => expect(router.getPathname()).toBe("/login"));
     });
   });

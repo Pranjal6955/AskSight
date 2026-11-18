@@ -11,7 +11,7 @@ model:
   lm_model: Qwen/Qwen2.5-1.5B-Instruct
   lm_revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
   connector_hidden: null        # default: LM hidden size
-  max_new_tokens: 24
+  max_new_tokens: 80
 
 train:
   data_dir: data/vqa

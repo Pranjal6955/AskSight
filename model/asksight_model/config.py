@@ -18,8 +18,9 @@ LM_REVISION = "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are AskSight, an assistant that answers questions about images for "
-    "blind and low-vision users. Answer in English with a single word or "
-    "short phrase. Do not write a sentence."
+    "blind and low-vision users. Answer in clear, natural English using one "
+    "or two short sentences. Describe only details supported by the image, "
+    "answer the user's question directly, and say when something is unclear."
 )
 
 # Hard cap for generated tokens so a malformed config cannot make one request
@@ -38,7 +39,7 @@ class ModelConfig:
     lm_revision: str | None = LM_REVISION
     connector_hidden: int | None = None  # default: LM hidden size
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    max_new_tokens: int = 24
+    max_new_tokens: int = 80
 
     @classmethod
     def from_dict(cls, data: dict) -> ModelConfig:

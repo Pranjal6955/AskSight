@@ -1,0 +1,88 @@
+import {
+  fireEvent,
+  renderRouter,
+  screen,
+  waitFor,
+} from "expo-router/testing-library";
+
+import TabsLayout from "../src/app/(tabs)/_layout";
+import HistoryScreen from "../src/app/(tabs)/history";
+import HomeScreen from "../src/app/(tabs)/home";
+import SettingsScreen from "../src/app/(tabs)/settings";
+import RootLayout from "../src/app/_layout";
+import Index from "../src/app/index";
+import LoginScreen from "../src/app/login";
+import SignupScreen from "../src/app/signup";
+import ConsentScreen from "../src/app/consent";
+import HistoryDetailScreen from "../src/app/history/[id]";
+import * as api from "../src/lib/api";
+import { setAccessToken, setRefreshToken } from "../src/lib/session";
+import { TEST_USER } from "../test-utils";
+
+jest.mock("../src/lib/useSpeech", () => ({
+  useSpeech: () => ({ play: jest.fn(), stop: jest.fn(), isPlaying: false }),
+}));
+
+const routes = {
+  _layout: RootLayout,
+  index: Index,
+  login: LoginScreen,
+  signup: SignupScreen,
+  consent: ConsentScreen,
+  capture: () => null,
+  "photo-preview": () => null,
+  ask: () => null,
+  transcript: () => null,
+  answer: () => null,
+  "history/[id]": HistoryDetailScreen,
+  "(tabs)/_layout": TabsLayout,
+  "(tabs)/home": HomeScreen,
+  "(tabs)/history": HistoryScreen,
+  "(tabs)/settings": SettingsScreen,
+};
+
+afterEach(() => {
+  jest.restoreAllMocks();
+  setAccessToken(null);
+  api.setSessionExpiredHandler(null);
+});
+
+describe("route guard", () => {
+  test("sends a signed-out user to Login", async () => {
+    await renderRouter(routes, { initialUrl: "/home" });
+
+    await waitFor(() =>
+      expect(screen.getByText("Welcome back to AskSight")).toBeOnTheScreen(),
+    );
+  });
+
+  test("requires consent before opening the signed-in app", async () => {
+    await setRefreshToken("r1");
+    jest.spyOn(api, "refresh").mockResolvedValue({
+      access_token: "a2",
+      refresh_token: "r2",
+      token_type: "bearer",
+    });
+    jest.spyOn(api, "me").mockResolvedValue(TEST_USER);
+
+    await renderRouter(routes, { initialUrl: "/login" });
+
+    await waitFor(() =>
+      expect(screen.getByText("Before you start")).toBeOnTheScreen(),
+    );
+    expect(screen.queryByText("Choose a photo")).not.toBeOnTheScreen();
+    expect(
+      screen.getByText(/stored in your account until you delete them/),
+    ).toBeOnTheScreen();
+    expect(screen.queryByText(/sent to Sarvam/)).not.toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole("button", { name: "Read More" }));
+    expect(await screen.findByText(/sent to Sarvam/)).toBeOnTheScreen();
+
+    await fireEvent.press(screen.getByRole("button", { name: "I Understand" }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Choose a photo" }),
+      ).toBeOnTheScreen(),
+    );
+  });
+});

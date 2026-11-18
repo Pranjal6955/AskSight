@@ -18,9 +18,10 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { toFriendlyMessage } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useKeyboardAwareScroll } from "@/lib/useKeyboardAwareScroll";
+import { getPendingPhoto } from "@/lib/pendingPhoto";
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn, sessionNotice } = useAuth();
   const { scrollRef, trackFocus } = useKeyboardAwareScroll();
   const passwordRef = useRef<TextInput>(null);
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,10 +53,21 @@ export default function LoginScreen() {
       // again while the redirect is pending. The timer is cleared on unmount,
       // so navigating away during the hold cancels the redirect instead of
       // hijacking whatever screen the user moved to.
-      redirectTimer.current = setTimeout(
-        () => router.replace("/(tabs)/home"),
-        600,
-      );
+      redirectTimer.current = setTimeout(() => {
+        const pendingPhoto = getPendingPhoto();
+        router.replace(
+          pendingPhoto
+            ? ({
+                pathname: "/photo-preview",
+                params: {
+                  uri: pendingPhoto.uri,
+                  name: pendingPhoto.name,
+                  type: pendingPhoto.type,
+                },
+              } as never)
+            : "/(tabs)/home",
+        );
+      }, 600);
     } catch (cause) {
       if (!mounted.current) return;
       setError(
@@ -130,6 +142,23 @@ export default function LoginScreen() {
                 onSubmitEditing={handleSignIn}
               />
             </View>
+
+            {sessionNotice ? (
+              <View
+                className="mt-4 flex-row items-start gap-3 rounded-field border-2 border-inputBorder bg-white p-4"
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+              >
+                <MaterialCommunityIcons
+                  name="information-outline"
+                  size={24}
+                  color="#000000"
+                />
+                <Text className="flex-1 text-xl font-semibold leading-7 text-ink">
+                  {sessionNotice}
+                </Text>
+              </View>
+            ) : null}
 
             {error ? (
               <View

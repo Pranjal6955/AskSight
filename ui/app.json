@@ -27,11 +27,37 @@
     "plugins": [
       "expo-router",
       [
+        "expo-camera",
+        {
+          "cameraPermission": "AskSight uses the camera so you can take a photo to ask about.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AskSight uses your chosen photo so you can ask about it.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "AskSight uses the microphone so you can ask a question about your photo.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ]
     ],
