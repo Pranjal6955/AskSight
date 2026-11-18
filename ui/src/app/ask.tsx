@@ -21,7 +21,12 @@ import { ProgressAnnouncer } from "@/components/ProgressAnnouncer";
 import { SecondaryButton } from "@/components/SecondaryButton";
 import { StatusBanner } from "@/components/StatusBanner";
 import { ThinkingPanel } from "@/components/ThinkingPanel";
-import { synthesize, toFriendlyMessage, transcribe, type UploadFile } from "@/lib/api";
+import {
+  synthesize,
+  toFriendlyMessage,
+  transcribe,
+  type UploadFile,
+} from "@/lib/api";
 import { announce } from "@/lib/a11y";
 import { useRecorder } from "@/lib/useRecorder";
 import { useAskQuestion } from "@/lib/useAskQuestion";
@@ -41,9 +46,15 @@ export default function AskScreen() {
     question?: string;
   }>();
   const imageId = params.image_id ?? "";
-  const photoUri = params.photo_uri ?? getPendingPhoto()?.previewUri ?? getPendingPhoto()?.uri ?? "";
+  const photoUri =
+    params.photo_uri ??
+    getPendingPhoto()?.previewUri ??
+    getPendingPhoto()?.uri ??
+    "";
   const [question, setQuestion] = useState(params.question ?? "");
-  const [messages, setMessages] = useState<{ question: string; answer: string }[]>([]);
+  const [messages, setMessages] = useState<
+    { question: string; answer: string }[]
+  >([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<"transcribing" | "">("");
   const [permissionPrompt, setPermissionPrompt] = useState(false);
@@ -56,41 +67,57 @@ export default function AskScreen() {
   const { play: playSpeech, stop: stopSpeech } = useSpeech();
   const speechFile = useRef<File | null>(null);
 
-  const speakAnswer = useCallback(async (text: string) => {
-    setSpeechLoading(true);
-    try {
-      const audio = await synthesize(text, settings.speechLanguage);
-      let uri: string;
-      if (Platform.OS === "web") {
-        uri = URL.createObjectURL(new Blob([audio.bytes], { type: audio.mimeType || "audio/mpeg" }));
-      } else {
-        const file = new File(Paths.cache, `asksight-chat-${Date.now()}.mp3`);
-        file.create({ intermediates: true, overwrite: true });
-        await file.write(new Uint8Array(audio.bytes));
-        speechFile.current?.delete();
-        speechFile.current = file;
-        uri = file.uri;
+  const speakAnswer = useCallback(
+    async (text: string) => {
+      setSpeechLoading(true);
+      try {
+        const audio = await synthesize(text, settings.speechLanguage);
+        let uri: string;
+        if (Platform.OS === "web") {
+          uri = URL.createObjectURL(
+            new Blob([audio.bytes], { type: audio.mimeType || "audio/mpeg" }),
+          );
+        } else {
+          const file = new File(Paths.cache, `asksight-chat-${Date.now()}.mp3`);
+          file.create({ intermediates: true, overwrite: true });
+          await file.write(new Uint8Array(audio.bytes));
+          speechFile.current?.delete();
+          speechFile.current = file;
+          uri = file.uri;
+        }
+        await playSpeech(uri, settings.speechRate);
+      } finally {
+        setSpeechLoading(false);
       }
-      await playSpeech(uri, settings.speechRate);
-    } finally {
-      setSpeechLoading(false);
-    }
-  }, [playSpeech, settings.speechLanguage, settings.speechRate]);
+    },
+    [playSpeech, settings.speechLanguage, settings.speechRate],
+  );
 
-  useEffect(() => () => {
-    void stopSpeech();
-    if (speechFile.current?.exists) speechFile.current.delete();
-  }, [stopSpeech]);
+  useEffect(
+    () => () => {
+      void stopSpeech();
+      if (speechFile.current?.exists) speechFile.current.delete();
+    },
+    [stopSpeech],
+  );
 
-  const addAnswer = useCallback((spokenQuestion: string, answer: string) => {
-    setMessages((current) => [...current, { question: spokenQuestion, answer }]);
-    setQuestion("");
-    if (autoSpeak) {
-      void speakAnswer(answer).catch((cause) => {
-        setError(toFriendlyMessage(cause, "We couldn't play the spoken answer."));
-      });
-    }
-  }, [autoSpeak, speakAnswer]);
+  const addAnswer = useCallback(
+    (spokenQuestion: string, answer: string) => {
+      setMessages((current) => [
+        ...current,
+        { question: spokenQuestion, answer },
+      ]);
+      setQuestion("");
+      if (autoSpeak) {
+        void speakAnswer(answer).catch((cause) => {
+          setError(
+            toFriendlyMessage(cause, "We couldn't play the spoken answer."),
+          );
+        });
+      }
+    },
+    [autoSpeak, speakAnswer],
+  );
 
   const processRecording = useCallback(
     async (file: UploadFile) => {
@@ -200,14 +227,35 @@ export default function AskScreen() {
         }
       />
       <View className="flex-row items-center justify-between px-5 py-3">
-        <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={() => router.back()} className="h-12 w-12 items-center justify-center rounded-full">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          onPress={() => router.back()}
+          className="h-12 w-12 items-center justify-center rounded-full"
+        >
           <MaterialCommunityIcons name="arrow-left" size={28} color="#000000" />
         </Pressable>
-        <View className="flex-row items-center gap-2" accessible accessibilityLabel="AskSight">
-          <MaterialCommunityIcons name="eye" size={28} color="#000000" importantForAccessibility="no-hide-descendants" />
-          <AppText variant="section" className="text-ink">AskSight</AppText>
+        <View
+          className="flex-row items-center gap-2"
+          accessible
+          accessibilityLabel="AskSight"
+        >
+          <MaterialCommunityIcons
+            name="eye"
+            size={28}
+            color="#000000"
+            importantForAccessibility="no-hide-descendants"
+          />
+          <AppText variant="section" className="text-ink">
+            AskSight
+          </AppText>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Open settings" onPress={() => router.navigate("/(tabs)/settings")} className="h-12 w-12 items-center justify-center rounded-full">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Open settings"
+          onPress={() => router.navigate("/(tabs)/settings")}
+          className="h-12 w-12 items-center justify-center rounded-full"
+        >
           <MaterialCommunityIcons name="cog" size={28} color="#000000" />
         </Pressable>
       </View>
@@ -243,10 +291,14 @@ export default function AskScreen() {
           {messages.map((message, index) => (
             <View key={`${index}-${message.question}`} className="gap-3">
               <View className="self-end rounded-card bg-field px-5 py-4">
-                <AppText variant="bodyLarge" className="text-ink">{message.question}</AppText>
+                <AppText variant="bodyLarge" className="text-ink">
+                  {message.question}
+                </AppText>
               </View>
               <View className="self-stretch rounded-card border-2 border-inputBorder bg-white px-5 py-4">
-                <AppText variant="answer" className="text-ink">{message.answer}</AppText>
+                <AppText variant="answer" className="text-ink">
+                  {message.answer}
+                </AppText>
               </View>
             </View>
           ))}
@@ -304,16 +356,25 @@ export default function AskScreen() {
             />
           ) : null}
           {speechLoading ? (
-            <View className="flex-row items-center gap-3" accessibilityLiveRegion="polite">
+            <View
+              className="flex-row items-center gap-3"
+              accessibilityLiveRegion="polite"
+            >
               <ActivityIndicator color="#000000" />
-              <AppText variant="body" className="text-muted">Preparing spoken answer…</AppText>
+              <AppText variant="body" className="text-muted">
+                Preparing spoken answer…
+              </AppText>
             </View>
           ) : null}
         </View>
       </ScrollView>
       <SafeAreaView edges={["bottom"]} className="bg-white px-4 pb-3 pt-3">
         <View className="mx-auto w-full max-w-[560px] flex-row items-center gap-3">
-          <MicButton compact state={micState} onPress={() => void toggleRecording()} />
+          <MicButton
+            compact
+            state={micState}
+            onPress={() => void toggleRecording()}
+          />
           <TextInput
             accessibilityLabel="Ask a follow-up question"
             accessibilityHint="Type a question about the photo."
@@ -328,14 +389,24 @@ export default function AskScreen() {
             className="h-14 min-w-0 flex-1 rounded-field border-2 border-inputBorder bg-white px-4 text-xl text-ink"
           />
           {recorder.isRecording ? (
-            <Pressable accessibilityRole="button" accessibilityLabel="Stop recording" onPress={() => void toggleRecording()} className="h-14 w-14 items-center justify-center rounded-full bg-warning">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Stop recording"
+              onPress={() => void toggleRecording()}
+              className="h-14 w-14 items-center justify-center rounded-full bg-warning"
+            >
               <MaterialCommunityIcons name="stop" size={28} color="#000000" />
             </Pressable>
           ) : (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Send question"
-              disabled={!question.trim() || !imageId || askRequest.loading || busy === "transcribing"}
+              disabled={
+                !question.trim() ||
+                !imageId ||
+                askRequest.loading ||
+                busy === "transcribing"
+              }
               onPress={() => void submitQuestion()}
               className="h-14 w-14 items-center justify-center rounded-full bg-brand disabled:bg-brand-muted"
             >
@@ -343,7 +414,15 @@ export default function AskScreen() {
             </Pressable>
           )}
         </View>
-        {recorder.isRecording ? <AppText variant="supporting" accessibilityLiveRegion="polite" className="mt-2 text-center text-ink">Listening · {formatDuration(recorder.durationMillis)}</AppText> : null}
+        {recorder.isRecording ? (
+          <AppText
+            variant="supporting"
+            accessibilityLiveRegion="polite"
+            className="mt-2 text-center text-ink"
+          >
+            Listening · {formatDuration(recorder.durationMillis)}
+          </AppText>
+        ) : null}
       </SafeAreaView>
     </SafeAreaView>
   );

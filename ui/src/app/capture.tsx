@@ -4,7 +4,14 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/AppText";
@@ -23,38 +30,66 @@ export default function CaptureScreen() {
   const camera = useRef<CameraView>(null);
   const pickerOpened = useRef(false);
 
-  const uploadPhoto = useCallback(async (uri: string, name: string, type: string) => {
-    if (taking) return;
-    setTaking(true);
-    setError("");
-    const photo = { uri, previewUri: uri, name, type };
-    setPendingPhoto(photo);
-    try {
-      const image = await uploadImage(photo);
-      router.replace({ pathname: "/ask", params: { image_id: image.id } } as never);
-    } catch (cause) {
-      const message = toFriendlyMessage(cause, "We couldn't upload that photo. Please try again.");
-      setError(cause instanceof ApiError && cause.status === 413 ? "Choose a smaller photo." : message);
-      setTaking(false);
-    }
-  }, [taking]);
+  const uploadPhoto = useCallback(
+    async (uri: string, name: string, type: string) => {
+      if (taking) return;
+      setTaking(true);
+      setError("");
+      const photo = { uri, previewUri: uri, name, type };
+      setPendingPhoto(photo);
+      try {
+        const image = await uploadImage(photo);
+        router.replace({
+          pathname: "/ask",
+          params: { image_id: image.id },
+        } as never);
+      } catch (cause) {
+        const message = toFriendlyMessage(
+          cause,
+          "We couldn't upload that photo. Please try again.",
+        );
+        setError(
+          cause instanceof ApiError && cause.status === 413
+            ? "Choose a smaller photo."
+            : message,
+        );
+        setTaking(false);
+      }
+    },
+    [taking],
+  );
 
   const choosePhoto = useCallback(async () => {
     try {
-      const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const mediaPermission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!mediaPermission.granted) {
-        setError("Photo library access is off. Enable it in settings or take a photo.");
+        setError(
+          "Photo library access is off. Enable it in settings or take a photo.",
+        );
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.8 });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        quality: 0.8,
+      });
       if (result.canceled || !result.assets[0]) {
         if (params.pick === "1" && !permission?.granted) router.back();
         return;
       }
       const asset = result.assets[0];
-      await uploadPhoto(asset.uri, asset.fileName ?? "asksight-photo.jpg", asset.mimeType ?? "image/jpeg");
+      await uploadPhoto(
+        asset.uri,
+        asset.fileName ?? "asksight-photo.jpg",
+        asset.mimeType ?? "image/jpeg",
+      );
     } catch (cause) {
-      setError(toFriendlyMessage(cause, "We couldn't choose that photo. Please try again."));
+      setError(
+        toFriendlyMessage(
+          cause,
+          "We couldn't choose that photo. Please try again.",
+        ),
+      );
     }
   }, [params.pick, permission, uploadPhoto]);
 
@@ -177,14 +212,25 @@ export default function CaptureScreen() {
         onCameraReady={() => setCameraReady(true)}
         onMountError={() => {
           setCameraReady(false);
-          setError("We couldn't start the camera. Please close it and try again.");
+          setError(
+            "We couldn't start the camera. Please close it and try again.",
+          );
         }}
         pointerEvents="none"
       />
       {taking ? (
-        <View accessibilityRole="progressbar" accessibilityLabel="Preparing photo" className="absolute inset-0 z-10 items-center justify-center bg-black/70">
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Preparing photo"
+          className="absolute inset-0 z-10 items-center justify-center bg-black/70"
+        >
           <ActivityIndicator size="large" color="white" />
-          <AppText variant="bodyLarge" className="mt-4 font-semibold text-white">Preparing your photo…</AppText>
+          <AppText
+            variant="bodyLarge"
+            className="mt-4 font-semibold text-white"
+          >
+            Preparing your photo…
+          </AppText>
         </View>
       ) : null}
       {!cameraReady ? (

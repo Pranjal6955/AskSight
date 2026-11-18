@@ -15,7 +15,11 @@ import {
   type UploadFile,
 } from "@/lib/api";
 import { announce } from "@/lib/a11y";
-import { clearPendingPhoto, getPendingPhoto, setPendingPhoto } from "@/lib/pendingPhoto";
+import {
+  clearPendingPhoto,
+  getPendingPhoto,
+  setPendingPhoto,
+} from "@/lib/pendingPhoto";
 
 export default function PhotoPreviewScreen() {
   const params = useLocalSearchParams<{
@@ -26,14 +30,15 @@ export default function PhotoPreviewScreen() {
     pick?: string;
   }>();
   const [photo, setPhoto] = useState<UploadFile | null>(
-    getPendingPhoto() ?? (params.uri
-      ? {
-          uri: params.uri,
-          previewUri: params.preview_uri,
-          name: params.name ?? "asksight-photo.jpg",
-          type: params.type ?? "image/jpeg",
-        }
-      : null),
+    getPendingPhoto() ??
+      (params.uri
+        ? {
+            uri: params.uri,
+            previewUri: params.preview_uri,
+            name: params.name ?? "asksight-photo.jpg",
+            type: params.type ?? "image/jpeg",
+          }
+        : null),
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -164,8 +169,18 @@ export default function PhotoPreviewScreen() {
               accessibilityLabel="Your photo"
               accessible
               resizeMode="contain"
-              onError={() => setError("We couldn't display this photo. Please choose it again.")}
-              style={{ height: 320, width: "100%", marginBottom: 24, borderRadius: 20, backgroundColor: "#F2F2F2" }}
+              onError={() =>
+                setError(
+                  "We couldn't display this photo. Please choose it again.",
+                )
+              }
+              style={{
+                height: 320,
+                width: "100%",
+                marginBottom: 24,
+                borderRadius: 20,
+                backgroundColor: "#F2F2F2",
+              }}
             />
           ) : (
             <View className="mb-6 h-56 items-center justify-center rounded-card bg-field">

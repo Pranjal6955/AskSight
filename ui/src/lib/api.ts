@@ -142,7 +142,10 @@ function sendMultipart(
     }
     xhr.onload = () => {
       const responseHeaders = new Headers();
-      for (const line of xhr.getAllResponseHeaders().trim().split(/[\r\n]+/)) {
+      for (const line of xhr
+        .getAllResponseHeaders()
+        .trim()
+        .split(/[\r\n]+/)) {
         const separator = line.indexOf(":");
         if (separator > 0) {
           responseHeaders.append(
