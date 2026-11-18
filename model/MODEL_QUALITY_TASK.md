@@ -88,5 +88,23 @@ release checkpoint.
 
 ## Current status
 
-Not started. The existing connector-only checkpoint and its limited evaluation
-are a baseline, not proof of release quality.
+Baseline workflow work has started: `evaluate --questions-file` now runs a
+fixed, separately curated AskSight question set through the real local
+checkpoint and saves predictions with a SHA-256 fingerprint of the question
+set, prompt, generation limit, model version, and serving measurements. VQA
+predictions also retain all ten reference answers and image IDs for review.
+No curated AskSight set or improved candidate has been evaluated yet; this
+workflow change does not establish release quality.
+
+Next: curate and freeze the initial AskSight set, run the current real
+checkpoint plus at least one candidate on both held-out sets, then review
+wrong answers by type and record those findings here before choosing a release
+checkpoint.
+
+The training notebook now defaults to 20,000 VQA examples and documents a
+50,000-example configuration. It also supports adding hand-reviewed custom
+question/answer examples, including photo descriptions. The shared prompt
+distinguishes brief direct answers from three-to-five-sentence description
+requests, with a 128-token generation cap. No larger training run has been
+completed yet, and VQA-only data is still not sufficient evidence for improved
+description quality.

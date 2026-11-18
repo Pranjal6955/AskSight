@@ -11,12 +11,14 @@ Usage (from `model/`):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import statistics
 import time
 from pathlib import Path
 
+import yaml
 from PIL import Image
 
 from .service import LocalInferenceService
@@ -268,9 +270,10 @@ def evaluate(
                 json.dumps(
                     {
                         "question_id": record["question_id"],
+                        "image_id": record["image_id"],
                         "question": record["question"],
                         "prediction": prediction,
-                        "reference": record["answers"][0],
+                        "references": record["answers"],
                     }
                 )
                 + "\n"
@@ -284,6 +287,84 @@ def evaluate(
     return result
 
 
+def evaluate_questions(
+    checkpoint_dir: Path,
+    questions_file: Path,
+    limit: int | None = None,
+    device: str = "auto",
+) -> dict:
+    """Generate predictions for a fixed, hand-curated AskSight question set.
+
+    Each JSONL row has `id`, `image`, `question`, and optional `category`.
+    Images are resolved relative to the JSONL file. This path intentionally
+    produces reviewable predictions without claiming an automatic quality score.
+    """
+    questions_file = Path(questions_file)
+    records = load_jsonl(questions_file)
+    if limit is not None:
+        records = records[:limit]
+    if not records:
+        raise ValueError(f"no questions in {questions_file}")
+    for index, record in enumerate(records):
+        if not isinstance(record.get("id"), str) or not record["id"].strip():
+            raise ValueError(f"record {index} must have a non-empty 'id'")
+        for field in ("image", "question"):
+            if not isinstance(record.get(field), str) or not record[field].strip():
+                raise ValueError(f"record {index} must have a non-empty {field!r}")
+
+    service = LocalInferenceService(checkpoint_dir, device=device)
+    predictions, latencies = [], []
+    for record in records:
+        image = Image.open(questions_file.parent / record["image"]).convert("RGB")
+        started = time.perf_counter()
+        predictions.append(service.answer(image, record["question"]))
+        latencies.append(time.perf_counter() - started)
+
+    config_path = Path(checkpoint_dir) / "config.yaml"
+    try:
+        config = yaml.safe_load(config_path.read_text()) or {}
+    except OSError:
+        config = {}
+    latencies_sorted = sorted(latencies)
+    stats = service.stats()
+    result = {
+        "evaluation": "asksight_questions",
+        "question_set": questions_file.name,
+        "question_set_sha256": hashlib.sha256(questions_file.read_bytes()).hexdigest(),
+        "n": len(records),
+        "model_version": service.model_version,
+        "system_prompt": config.get("system_prompt"),
+        "max_new_tokens": config.get("max_new_tokens"),
+        "device": service.model.device.type,
+        "latency_median_s": round(statistics.median(latencies_sorted), 3),
+        "latency_p95_s": round(latencies_sorted[int(0.95 * (len(latencies_sorted) - 1))], 3),
+        "startup_seconds": stats["startup_seconds"],
+        "process_rss_mb": stats["process_rss_mb"],
+    }
+    predictions_path = Path(checkpoint_dir) / f"predictions_asksight_{questions_file.stem}.jsonl"
+    with predictions_path.open("w") as handle:
+        for record, prediction in zip(records, predictions, strict=True):
+            handle.write(
+                json.dumps(
+                    {
+                        "id": record["id"],
+                        "image": record["image"],
+                        "question": record["question"],
+                        "category": record.get("category"),
+                        "prediction": prediction,
+                    }
+                )
+                + "\n"
+            )
+    result["predictions_file"] = predictions_path.name
+    metrics_path = Path(checkpoint_dir) / "metrics.json"
+    metrics = json.loads(metrics_path.read_text()) if metrics_path.exists() else {}
+    metrics[f"eval_asksight_{questions_file.stem}"] = result
+    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n")
+    print(json.dumps(result, indent=2))
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Evaluate an AskSight checkpoint")
     parser.add_argument("--checkpoint", type=Path, required=True)
@@ -291,8 +372,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", default="test", choices=["val", "test"])
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--device", default="auto")
+    parser.add_argument(
+        "--questions-file",
+        type=Path,
+        help="run a fixed AskSight JSONL question set instead of VQA v2",
+    )
     args = parser.parse_args(argv)
-    evaluate(args.checkpoint, args.data_dir, args.split, args.limit, args.device)
+    if args.questions_file:
+        evaluate_questions(args.checkpoint, args.questions_file, args.limit, args.device)
+    else:
+        evaluate(args.checkpoint, args.data_dir, args.split, args.limit, args.device)
     return 0
 
 

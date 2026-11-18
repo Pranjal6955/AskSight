@@ -11,7 +11,15 @@ model:
   lm_model: Qwen/Qwen2.5-1.5B-Instruct
   lm_revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
   connector_hidden: null        # default: LM hidden size
-  max_new_tokens: 80
+  system_prompt: >-
+    You are AskSight, an assistant that answers questions about images for
+    blind and low-vision users. Answer in clear, natural English. For a
+    direct question, answer clearly and
+    briefly, usually in one sentence. If the user asks to describe the image
+    or photo, give a useful description in three to five short sentences.
+    Mention only details supported by the image, include important visible
+    text when readable, and say when something is unclear.
+  max_new_tokens: 128
 
 train:
   data_dir: data/vqa
