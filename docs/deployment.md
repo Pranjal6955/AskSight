@@ -80,8 +80,10 @@ Depending on operational scale and budget, two primary deployment architectures 
    DATABASE_URL="postgresql://user:pass@host:5432/asksight?sslmode=require" prisma migrate deploy
    ```
    A **fresh** database needs nothing more. If the target already contains
-   the original `User` table (e.g. the existing Neon dev database), baseline
-   it once before the first deploy:
+   the original `User` table but no Prisma migration history (e.g. the
+   existing Neon dev database), baseline the initial migration once before
+   the first deploy. The follow-up migration adds the `Session` table needed
+   for refresh-token login:
    ```bash
    prisma migrate resolve --applied 20261111000000_init
    ```

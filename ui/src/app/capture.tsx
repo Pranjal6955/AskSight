@@ -3,7 +3,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Linking, Pressable, ScrollView, View } from "react-native";
+import { Linking, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { AppText } from "@/components/AppText";
@@ -14,6 +14,7 @@ export default function CaptureScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
   const [taking, setTaking] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [error, setError] = useState("");
   const camera = useRef<CameraView>(null);
 
@@ -34,7 +35,7 @@ export default function CaptureScreen() {
   }
 
   async function capture() {
-    if (taking || !camera.current) return;
+    if (taking || !cameraReady || !camera.current) return;
     setError("");
     setTaking(true);
     try {
@@ -129,19 +130,26 @@ export default function CaptureScreen() {
     <View className="flex-1 bg-black">
       <CameraView
         ref={camera}
-        className="flex-1"
+        style={StyleSheet.absoluteFill}
         facing="back"
         enableTorch={torch}
+        onCameraReady={() => setCameraReady(true)}
+        onMountError={() => {
+          setCameraReady(false);
+          setError("We couldn't start the camera. Please close it and try again.");
+        }}
         pointerEvents="none"
       />
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Tap anywhere to take a photo"
-        accessibilityHint="Captures what the camera can see."
-        disabled={taking}
-        onPress={() => void capture()}
-        className="absolute inset-0"
-      />
+      {!cameraReady ? (
+        <View
+          pointerEvents="none"
+          className="absolute inset-0 items-center justify-center"
+        >
+          <AppText variant="bodyLarge" className="text-white">
+            Starting camera…
+          </AppText>
+        </View>
+      ) : null}
       <SafeAreaView
         edges={["top"]}
         className="absolute left-0 right-0 top-0 px-5"
@@ -164,7 +172,10 @@ export default function CaptureScreen() {
           </Pressable>
         </View>
       </SafeAreaView>
-      <SafeAreaView edges={["bottom"]} className="bg-black px-5 pb-3 pt-4">
+      <SafeAreaView
+        edges={["bottom"]}
+        className="absolute bottom-0 left-0 right-0 bg-black/80 px-5 pb-3 pt-4"
+      >
         <View className="flex-row items-center justify-between">
           <Pressable
             accessibilityRole="button"
@@ -187,8 +198,11 @@ export default function CaptureScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Take photo"
-            accessibilityState={{ disabled: taking, busy: taking }}
-            disabled={taking}
+            accessibilityState={{
+              disabled: taking || !cameraReady,
+              busy: taking,
+            }}
+            disabled={taking || !cameraReady}
             onPress={() => void capture()}
             className="h-28 w-28 items-center justify-center rounded-full border-[6px] border-white"
           >
@@ -208,7 +222,7 @@ export default function CaptureScreen() {
           </Pressable>
         </View>
         <AppText variant="body" className="mt-3 text-center text-white">
-          Tap anywhere to take a photo
+          Use the shutter button to take a photo
         </AppText>
       </SafeAreaView>
     </View>
