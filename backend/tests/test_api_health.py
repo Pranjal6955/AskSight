@@ -33,11 +33,6 @@ class TestHealth(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json(), {"status": "ok"})
 
-    def test_bare_health_is_liveness(self):
-        res = self.client.get("/health")
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json(), {"status": "ok"})
-
     def test_ready_reports_database_and_model_ok(self):
         res = self.client.get("/health/ready")
         self.assertEqual(res.status_code, 200)

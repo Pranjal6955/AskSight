@@ -1,0 +1,26 @@
+"""AskSight LLaVA-style multimodal model package (Track B)."""
+
+from .config import ModelConfig, TrainConfig, load_configs
+from .pipeline import AskSightModel, load_projector, save_checkpoint, verify_checkpoint
+from .service import (
+    CLARIFY_ANSWER,
+    PROTOCOL_VERSION,
+    InferenceService,
+    LocalInferenceService,
+    MockInferenceService,
+)
+
+__all__ = [
+    "AskSightModel",
+    "CLARIFY_ANSWER",
+    "InferenceService",
+    "LocalInferenceService",
+    "MockInferenceService",
+    "ModelConfig",
+    "PROTOCOL_VERSION",
+    "TrainConfig",
+    "load_configs",
+    "load_projector",
+    "save_checkpoint",
+    "verify_checkpoint",
+]
