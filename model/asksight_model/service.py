@@ -4,10 +4,8 @@ Track A codes against `InferenceService`. `MockInferenceService` keeps the full
 flow demoable before a trained checkpoint exists; `LocalInferenceService` loads
 a checkpoint once at construction and is what production uses after training.
 
-Protocol (version `PROTOCOL_VERSION`): `answer()` returns English answer text
-and raises `ValueError` for invalid input, `TimeoutError` when the queue wait
-exceeds `queue_timeout_s`, and `RuntimeError`/`ValueError` at startup for an
-unusable checkpoint. There is deliberately no confidence field.
+`answer()` retains the original string return type. `answer_with_metadata()`
+adds a confidence and abstention result for callers that can use it.
 """
 
 from __future__ import annotations
@@ -18,6 +16,7 @@ import sys
 import threading
 import time
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -31,11 +30,15 @@ from .pipeline import (
     resolve_device,
     verify_checkpoint,
 )
+from .question_prep import normalize_question
 
-# Returned when the model produces no usable output. AskSight must not assert a
-# confident answer it does not have (README promise); a calibrated confidence
-# score is intentionally NOT invented here (B5/A6).
+# Returned when generation produces no usable text. Low-confidence generations
+# use UNSURE_ANSWER after validation-split calibration.
 CLARIFY_ANSWER = "Sorry, I could not find a clear answer. Could you ask again in different words?"
+UNSURE_ANSWER = (
+    "I'm not sure about this. Could you retake the photo with better lighting "
+    "or a plain background?"
+)
 
 MAX_QUESTION_CHARS = 500
 PROTOCOL_VERSION = "1"
@@ -48,7 +51,23 @@ class InferenceService(Protocol):
     model_version: str
     protocol_version: str
 
-    def answer(self, image: Image.Image, question: str) -> str: ...
+    def answer(
+        self, image: Image.Image, question: str, history: list[Turn] | None = None
+    ) -> str: ...
+
+
+@dataclass(frozen=True)
+class Turn:
+    question: str
+    answer: str
+
+
+@dataclass(frozen=True)
+class AnswerResponse:
+    answer: str
+    confidence: float | None
+    abstained: bool
+    first_token_probability: float | None = None
 
 
 def validate_inputs(image: Image.Image, question: str) -> Image.Image:
@@ -90,9 +109,16 @@ class MockInferenceService:
     model_version = "mock-0.0.0"
     protocol_version = PROTOCOL_VERSION
 
-    def answer(self, image: Image.Image, question: str) -> str:
+    def answer(
+        self, image: Image.Image, question: str, history: list[Turn] | None = None
+    ) -> str:
         validate_inputs(image, question)
         return f"[mock answer] {question.strip()}"
+
+    def answer_with_metadata(
+        self, image: Image.Image, question: str, history: list[Turn] | None = None
+    ) -> AnswerResponse:
+        return AnswerResponse(self.answer(image, question, history), None, False)
 
 
 class LocalInferenceService:
@@ -146,6 +172,9 @@ class LocalInferenceService:
         self._requests = 0
         self._failures = 0
         self._timeouts = 0
+        self._abstained = 0
+        self._confidences: deque[float] = deque(maxlen=STATS_WINDOW)
+        self._question_logs: deque[dict[str, str]] = deque(maxlen=STATS_WINDOW)
         self._latencies: deque[float] = deque(maxlen=STATS_WINDOW)
         self._queue_times: deque[float] = deque(maxlen=STATS_WINDOW)
         self._generation_times: deque[float] = deque(maxlen=STATS_WINDOW)
@@ -197,6 +226,8 @@ class LocalInferenceService:
             queue_times = list(self._queue_times)
             generation_times = list(self._generation_times)
             latencies = list(self._latencies)
+            confidences = list(self._confidences)
+            question_logs = list(self._question_logs)
         queue_median, queue_p95 = _percentiles(queue_times)
         generation_median, generation_p95 = _percentiles(generation_times)
         latency_median, latency_p95 = _percentiles(latencies)
@@ -211,6 +242,12 @@ class LocalInferenceService:
             "requests": requests,
             "failures": failures,
             "timeouts": timeouts,
+            "abstained": self._abstained,
+            "answered": requests - failures - self._abstained,
+            "abstain_rate": self._abstained / max(requests - failures, 1),
+            "confidence_count": len(confidences),
+            "confidence_median": statistics.median(confidences) if confidences else None,
+            "question_normalizations": question_logs[-20:],
             "queue_time_median_s": queue_median,
             "queue_time_p95_s": queue_p95,
             "generation_time_median_s": generation_median,
@@ -219,10 +256,18 @@ class LocalInferenceService:
             "latency_p95_s": latency_p95,
         }
 
-    def answer(self, image: Image.Image, question: str) -> str:
+    def answer(
+        self, image: Image.Image, question: str, history: list[Turn] | None = None
+    ) -> str:
+        return self.answer_with_metadata(image, question, history).answer
+
+    def answer_with_metadata(
+        self, image: Image.Image, question: str, history: list[Turn] | None = None
+    ) -> AnswerResponse:
         self._count_request()
         try:
             prepared = validate_inputs(image, question)
+            prepared_history = _validate_history(history)
         except Exception:
             self._count_failure()
             raise
@@ -241,12 +286,22 @@ class LocalInferenceService:
             )
         queued = time.perf_counter() - started
 
+        normalized_question = normalize_question(question)
+        normalized_history = [
+            (normalize_question(turn.question), turn.answer) for turn in prepared_history
+        ]
+        with self._stats_lock:
+            self._question_logs.append(
+                {"original": question, "normalized": normalized_question}
+            )
+
         generation_started = time.perf_counter()
         failed = False
         try:
-            output = self.model.generate(
+            output, confidence, first_probability = self.model.generate_with_confidence(
                 [prepared],
-                [question.strip()],
+                [normalized_question],
+                histories=[normalized_history],
                 max_new_tokens=self.model.config.max_new_tokens,
             )[0]
         except Exception:
@@ -262,4 +317,34 @@ class LocalInferenceService:
                 time.perf_counter() - started,
                 failed,
             )
-        return output or CLARIFY_ANSWER
+        with self._stats_lock:
+            self._confidences.append(confidence)
+        if not output:
+            return AnswerResponse(CLARIFY_ANSWER, confidence, False, first_probability)
+        abstained = confidence < self.model.config.confidence_threshold
+        if abstained:
+            with self._stats_lock:
+                self._abstained += 1
+        return AnswerResponse(
+            UNSURE_ANSWER if abstained else output,
+            confidence,
+            abstained,
+            first_probability,
+        )
+
+
+def _validate_history(history: list[Turn] | None) -> list[Turn]:
+    if history is None:
+        return []
+    if not isinstance(history, list):
+        raise ValueError("history must be a list of Turn(question, answer) pairs")
+    turns: list[Turn] = []
+    for index, turn in enumerate(history):
+        if isinstance(turn, dict):
+            question, answer = turn.get("question"), turn.get("answer")
+        else:
+            question, answer = getattr(turn, "question", None), getattr(turn, "answer", None)
+        if not isinstance(question, str) or not isinstance(answer, str):
+            raise ValueError(f"history turn {index} must contain string question and answer")
+        turns.append(Turn(question, answer))
+    return turns

@@ -14,6 +14,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.6"]
 vlm_eval = ["transformers>=5.0", "accelerate>=1.0"]
+confidence_eval = ["matplotlib>=3.8"]
 
 [build-system]
 requires = ["hatchling"]
