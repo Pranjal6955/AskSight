@@ -1,3 +1,4 @@
+import { File } from "expo-file-system";
 import {
   clearRefreshToken,
   getAccessToken,
@@ -338,11 +339,10 @@ async function authorized<T>(
 
 function fileForm(file: UploadFile): FormData {
   const form = new FormData();
-  form.append("file", {
-    uri: file.uri,
-    name: file.name,
-    type: file.type,
-  } as unknown as Blob);
+  // Expo SDK 58's fetch/FormData expects file contents as a Blob. The old
+  // React Native `{ uri, name, type }` descriptor can fail with an
+  // "unsupported FormData implementation" error on this runtime.
+  form.append("file", new File(file.uri), file.name);
   return form;
 }
 

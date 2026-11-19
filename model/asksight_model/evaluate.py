@@ -262,6 +262,20 @@ def evaluate(
         "startup_seconds": stats["startup_seconds"],
         "process_rss_mb": stats["process_rss_mb"],
     }
+    direct_rows = [
+        (record, prediction)
+        for record, prediction in zip(records, predictions, strict=True)
+        if isinstance(record.get("references"), list) and record["references"]
+    ]
+    if direct_rows:
+        result["direct_vqa_n"] = len(direct_rows)
+        result["direct_vqa_accuracy"] = round(
+            vqa_accuracy(
+                [prediction for _, prediction in direct_rows],
+                [record["references"] for record, _ in direct_rows],
+            ),
+            4,
+        )
 
     predictions_path = Path(checkpoint_dir) / f"predictions_{split}.jsonl"
     with open(predictions_path, "w") as handle:
@@ -351,6 +365,8 @@ def evaluate_questions(
                         "image": record["image"],
                         "question": record["question"],
                         "category": record.get("category"),
+                        "references": record.get("references"),
+                        "expected_facts": record.get("expected_facts"),
                         "prediction": prediction,
                     }
                 )

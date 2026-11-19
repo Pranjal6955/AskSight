@@ -88,23 +88,26 @@ release checkpoint.
 
 ## Current status
 
-Baseline workflow work has started: `evaluate --questions-file` now runs a
-fixed, separately curated AskSight question set through the real local
-checkpoint and saves predictions with a SHA-256 fingerprint of the question
-set, prompt, generation limit, model version, and serving measurements. VQA
-predictions also retain all ten reference answers and image IDs for review.
-No curated AskSight set or improved candidate has been evaluated yet; this
-workflow change does not establish release quality.
+Experiment setup (19 Nov 2026):
 
-Next: curate and freeze the initial AskSight set, run the current real
-checkpoint plus at least one candidate on both held-out sets, then review
-wrong answers by type and record those findings here before choosing a release
-checkpoint.
+- `evaluations/asksight_v1.jsonl` freezes 26 cases: 18 direct VQA questions
+  with ten human references each, plus 8 image-description prompts with
+  manually written fact rubrics. The images are held-out COCO validation
+  images, so this is a reproducible proxy set, not a real-user photo set.
+- Saved v0.1 and v0.2 predictions were aligned on the 18 direct questions.
+  This narrow slice scored 40.7% and 42.6% VQA accuracy, respectively. The
+  full v0.2 held-out benchmark remains the better estimate (47.7% on 1,014
+  questions). Neither checkpoint's description prompts have been run yet.
+- The Colab/Kaggle notebook now prepares candidate `v0.3-vqa20k-cap10k` from
+  20k VQA questions, about 10k COCO train captions, and 200 image-disjoint
+  caption validation images. It also evaluates Qwen3-VL-2B-Instruct on the
+  same fixed AskSight cases.
 
-The training notebook now defaults to 20,000 VQA examples and documents a
-50,000-example configuration. It also supports adding hand-reviewed custom
-question/answer examples, including photo descriptions. The shared prompt
-distinguishes brief direct answers from three-to-five-sentence description
-requests, with a 128-token generation cap. No larger training run has been
-completed yet, and VQA-only data is still not sufficient evidence for improved
-description quality.
+`evaluate --questions-file` and `evaluate_vlm` save the question-set hash,
+predictions, references/rubrics, prompt, model version, and serving measurements.
+The candidate training and Qwen3-VL inference require an Internet-enabled GPU
+runtime and have not been run here. The development machine has CPU-only PyTorch
+and about 2.7 GB available memory, which is not enough to safely load either
+full model. Do not select a release checkpoint until those runs finish and the
+description outputs have been reviewed against the fact rubrics. Add a separate
+consented real-photo set before making product-quality claims.
