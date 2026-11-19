@@ -26,6 +26,16 @@ import {
   setRefreshToken,
 } from "../src/lib/session";
 
+// The jest environment resolves expo-file-system to the web shim, whose File
+// is not a Blob. Native File implements Blob, so mirror that contract here.
+jest.mock("expo-file-system", () => ({
+  File: class extends Blob {
+    constructor(uri: string) {
+      super([uri]);
+    }
+  },
+}));
+
 const USER = {
   id: "1",
   name: "John Smith",

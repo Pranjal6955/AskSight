@@ -100,9 +100,7 @@ def evaluate_vlm(
             torch.cuda.synchronize()
         latencies.append(time.perf_counter() - started)
         new_tokens = generated[0][inputs["input_ids"].shape[-1] :]
-        predictions.append(
-            processor.decode(new_tokens, skip_special_tokens=True).strip()
-        )
+        predictions.append(processor.decode(new_tokens, skip_special_tokens=True).strip())
 
     direct = [
         (row, prediction)

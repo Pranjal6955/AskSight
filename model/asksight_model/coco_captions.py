@@ -50,7 +50,7 @@ def _download(url: str, destination: Path) -> None:
 
 def _load_captions(data_dir: Path, captions_json: Path | None) -> list[dict]:
     if captions_json is not None:
-        return json.loads(captions_json.read_text())['annotations']
+        return json.loads(captions_json.read_text())["annotations"]
 
     archive = data_dir / "_raw" / "coco_captions_trainval2014.zip"
     _download(COCO_CAPTIONS_URL, archive)
@@ -113,8 +113,7 @@ def prepare(
 
     image_dir = data_dir / "images" / "train2014"
     paths = {
-        image_id: image_dir / f"COCO_train2014_{image_id:012d}.jpg"
-        for image_id in selected_ids
+        image_id: image_dir / f"COCO_train2014_{image_id:012d}.jpg" for image_id in selected_ids
     }
 
     def fetch(image_id: int) -> tuple[int, bool]:
