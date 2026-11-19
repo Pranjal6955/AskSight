@@ -88,7 +88,6 @@ release checkpoint.
 
 ## Current status
 
-Experiment setup (19 Nov 2026):
 
 - `evaluations/asksight_v1.jsonl` freezes 26 cases: 18 direct VQA questions
   with ten human references each, plus 8 image-description prompts with
