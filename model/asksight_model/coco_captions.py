@@ -14,6 +14,7 @@ validation images are also kept separate from VQA training images.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 import shutil
@@ -24,8 +25,9 @@ import zipfile
 from collections import defaultdict
 from pathlib import Path
 
-COCO_CAPTIONS_URL = "https://images.cocodataset.org/annotations/annotations_trainval2014.zip"
-COCO_IMAGE_URL = "https://images.cocodataset.org/train2014/COCO_train2014_{image_id:012d}.jpg"
+COCO_CAPTIONS_URL = "http://images.cocodataset.org/annotations/annotations_trainval2014.zip"
+COCO_CAPTIONS_SHA256 = "031296bbc80c45a1d1f76bf9a90ead27e94e99ec629208449507a4917a3bf009"
+COCO_IMAGE_URL = "http://images.cocodataset.org/train2014/COCO_train2014_{image_id:012d}.jpg"
 
 
 def _download(url: str, destination: Path) -> None:
@@ -48,12 +50,33 @@ def _download(url: str, destination: Path) -> None:
     raise RuntimeError(f"could not download {url}: {last_error}") from last_error
 
 
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def _load_captions(data_dir: Path, captions_json: Path | None) -> list[dict]:
     if captions_json is not None:
         return json.loads(captions_json.read_text())["annotations"]
 
     archive = data_dir / "_raw" / "coco_captions_trainval2014.zip"
+    if archive.exists():
+        digest = _sha256(archive)
+        if digest != COCO_CAPTIONS_SHA256:
+            archive.unlink()
+    if not archive.exists():
+        print("Downloading COCO 2014 captions archive (~241 MB)...", flush=True)
     _download(COCO_CAPTIONS_URL, archive)
+    digest = _sha256(archive)
+    if digest != COCO_CAPTIONS_SHA256:
+        archive.unlink(missing_ok=True)
+        raise ValueError(
+            "downloaded COCO captions archive failed SHA-256 verification; "
+            "check the network connection and retry"
+        )
     with zipfile.ZipFile(archive) as zf:
         member = "annotations/captions_train2014.json"
         if member not in zf.namelist():
