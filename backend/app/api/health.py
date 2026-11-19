@@ -33,6 +33,7 @@ def _model_check() -> str:
     return "ok"
 
 
+@router.get("", response_model=LiveResponse, include_in_schema=False)
 @router.get("/live", response_model=LiveResponse)
 async def live():
     """Process is up. Touches nothing, so it stays green during an outage."""
