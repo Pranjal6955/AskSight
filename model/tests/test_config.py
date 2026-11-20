@@ -62,3 +62,22 @@ def test_validate_rejects_empty_version_and_prompt():
         validate_model_config(ModelConfig(version="  "))
     with pytest.raises(ValueError, match="system_prompt"):
         validate_model_config(ModelConfig(system_prompt=""))
+
+
+def test_validate_accepts_lora_settings():
+    validate_model_config(ModelConfig(lora_rank=16, lora_alpha=32, lora_dropout=0.05))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"lora_rank": 0},
+        {"lora_rank": 16, "lora_alpha": 0},
+        {"lora_rank": 16, "lora_dropout": 1.0},
+        {"lora_rank": 16, "lora_target_modules": []},
+        {"lora_rank": 16, "lora_target_modules": [""]},
+    ],
+)
+def test_validate_rejects_bad_lora_settings(overrides):
+    with pytest.raises(ValueError, match="lora"):
+        validate_model_config(ModelConfig(**overrides))

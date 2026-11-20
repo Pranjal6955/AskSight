@@ -8,20 +8,30 @@ from asksight_model import evaluate as evaluate_module
 from asksight_model import train as train_module
 
 
-def _write_config(path, tiny_paths, data_dir, out_dir) -> None:
+def _write_config(path, tiny_paths, data_dir, out_dir, lora: bool = False) -> None:
+    model = {
+        "version": "smoke",
+        "vision_model": str(tiny_paths["vision"]),
+        "vision_revision": None,
+        "lm_model": str(tiny_paths["lm"]),
+        "lm_revision": None,
+        "connector_hidden": 16,
+        "system_prompt": "You are a test.",
+        "max_new_tokens": 4,
+    }
+    if lora:
+        model.update(
+            {
+                "lora_rank": 2,
+                "lora_alpha": 4,
+                "lora_dropout": 0.0,
+                "lora_target_modules": ["c_attn", "c_proj", "c_fc"],
+            }
+        )
     path.write_text(
         yaml.safe_dump(
             {
-                "model": {
-                    "version": "smoke",
-                    "vision_model": str(tiny_paths["vision"]),
-                    "vision_revision": None,
-                    "lm_model": str(tiny_paths["lm"]),
-                    "lm_revision": None,
-                    "connector_hidden": 16,
-                    "system_prompt": "You are a test.",
-                    "max_new_tokens": 4,
-                },
+                "model": model,
                 "train": {
                     "data_dir": str(data_dir),
                     "out_dir": str(out_dir),
@@ -87,4 +97,42 @@ def test_train_then_evaluate_smoke(tiny_paths, tiny_records, tmp_path):
     assert 0.0 <= evaluated["vqa_accuracy"] <= 1.0
     assert evaluated["model_version"] == "smoke-v1"
     assert evaluated["latency_median_s"] > 0
+    assert 0.0 <= evaluated["sentence_rate"] <= 1.0
+    assert evaluated["system_prompt"] == "You are a test."
     assert (checkpoint / "predictions_test.jsonl").exists()
+
+
+def test_train_lora_then_evaluate_smoke(tiny_paths, tiny_records, tmp_path):
+    data_dir, _ = tiny_records
+    out_dir = tmp_path / "checkpoints"
+    config_path = tmp_path / "config.yaml"
+    _write_config(config_path, tiny_paths, data_dir, out_dir, lora=True)
+
+    assert train_module.main(["--config", str(config_path)]) == 0
+
+    checkpoint = out_dir / "smoke-v1"
+    assert (checkpoint / "adapter_config.json").exists()
+    assert (checkpoint / "adapter_model.safetensors").exists()
+    metrics = json.loads((checkpoint / "metrics.json").read_text())
+    assert metrics["lora_enabled"] is True
+    assert metrics["trainable_parameters"] > 0
+
+    assert (
+        evaluate_module.main(
+            [
+                "--checkpoint",
+                str(checkpoint),
+                "--data-dir",
+                str(data_dir),
+                "--split",
+                "test",
+                "--limit",
+                "2",
+                "--device",
+                "cpu",
+            ]
+        )
+        == 0
+    )
+    evaluated = json.loads((checkpoint / "metrics.json").read_text())["eval_test"]
+    assert evaluated["model_version"] == "smoke-v1"

@@ -59,6 +59,8 @@ def run(
     device: str = "auto",
 ) -> dict:
     records = load_jsonl(Path(data_dir) / f"{split}.jsonl")
+    # Caption validation rows added to val.jsonl have no VQA references.
+    records = [record for record in records if "answers" in record]
     if limit is not None:
         records = records[:limit]
     if not records:

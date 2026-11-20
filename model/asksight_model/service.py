@@ -23,7 +23,7 @@ from typing import Protocol
 
 from PIL import Image
 
-from .config import DEFAULT_SYSTEM_PROMPT, ModelConfig
+from .config import ModelConfig
 from .pipeline import (
     CONFIG_FILE,
     AskSightModel,
@@ -128,12 +128,9 @@ class LocalInferenceService:
         resolve_device(device)  # fail fast with a clear error
         verify_checkpoint(self.checkpoint_dir)  # fail before loading any backbones
         config = ModelConfig.load(config_path)
-        # Keep older checkpoints compatible with the current product behavior.
-        # The shipped v0.1 checkpoint explicitly requested one-word answers and
-        # capped generations at 24 tokens, which made spoken image descriptions
-        # unhelpfully terse.
-        config.system_prompt = DEFAULT_SYSTEM_PROMPT
-        config.max_new_tokens = max(config.max_new_tokens, 80)
+        # Serve exactly what was trained: same prompt, token limit, and LoRA
+        # setting from the checkpoint. Overriding the prompt at serve time hides
+        # training/serving mismatches instead of fixing them.
         self.model = AskSightModel(config, device=device, dtype=dtype)
         load_projector(self.checkpoint_dir, self.model)
         self.model.eval()

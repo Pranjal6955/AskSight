@@ -12,7 +12,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6"]
+dev = ["pytest>=8.0", "ruff>=0.6", "peft>=0.13"]
+lora = ["peft>=0.13"]
 vlm_eval = ["transformers>=5.0", "accelerate>=1.0"]
 
 [build-system]

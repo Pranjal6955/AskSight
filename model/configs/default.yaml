@@ -23,6 +23,12 @@ model:
     visible text when readable, and say when something is unclear instead of
     guessing.
   max_new_tokens: 128
+  # Optional LoRA on the LM (experiment C). 16/32/0.05 is the suggested start;
+  # 0.05 dropout is ignored when lora_rank is null. Target modules default to
+  # the Qwen2 attention + MLP projections.
+  lora_rank: null
+  lora_alpha: 32
+  lora_dropout: 0.05
 
 train:
   data_dir: data/vqa

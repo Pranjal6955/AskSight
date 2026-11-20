@@ -107,9 +107,11 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
     torch.manual_seed(train_config.seed)
 
     model = AskSightModel(model_config, device=train_config.device, dtype=train_config.dtype)
+    if model_config.lora_rank is not None:
+        model.enable_lora()
     if train_config.gradient_checkpointing:
         model.enable_gradient_checkpointing()
-    model.connector.train()  # backbones stay in eval mode
+    model.train_mode()  # vision stays in eval mode; connector/LoRA train
 
     optimizer = torch.optim.AdamW(
         model.trainable_parameters(), lr=train_config.lr, weight_decay=train_config.weight_decay
@@ -132,10 +134,13 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
             losses.append(loss.item())
             if step % 10 == 0:
                 print(f"epoch {epoch} step {step}: loss {loss.item():.4f}")
+        model.eval()  # disable LoRA dropout for validation
+        val_loss = _val_loss(model, val_records, data_dir, train_config.batch_size)
+        model.train_mode()
         epoch_metrics = {
             "epoch": epoch,
             "train_loss": sum(losses) / max(len(losses), 1),
-            "val_loss": _val_loss(model, val_records, data_dir, train_config.batch_size),
+            "val_loss": val_loss,
             "seconds": round(time.perf_counter() - started, 1),
         }
         history.append(epoch_metrics)
@@ -166,6 +171,8 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
         "dependencies": _dependency_versions(),
         "data_meta": data_meta,
         "epochs": history,
+        "trainable_parameters": sum(p.numel() for p in model.trainable_parameters()),
+        "lora_enabled": model.lora_enabled,
         "model_config": model_config.to_dict(),
         "train_config": asdict(train_config),
     }
@@ -183,6 +190,12 @@ def main(argv: list[str] | None = None) -> int:
         "--dtype", default=None, help="override config dtype (auto/float32/bfloat16)"
     )
     parser.add_argument("--version", default=None, help="override checkpoint version name")
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=None,
+        help="enable LoRA on the LM with this rank (overrides config)",
+    )
     args = parser.parse_args(argv)
 
     model_config, train_config = load_configs(args.config)
@@ -194,6 +207,8 @@ def main(argv: list[str] | None = None) -> int:
         train_config.dtype = args.dtype
     if args.version:
         train_config.version = args.version
+    if args.lora_rank is not None:
+        model_config.lora_rank = args.lora_rank
     train(model_config, train_config)
     return 0
 

@@ -72,6 +72,14 @@ def test_local_service_loads_is_ready_and_reports_stats(tiny_config, tiny_images
     assert stats["failures"] == 1
 
 
+def test_local_service_serves_the_checkpoint_prompt(tiny_config, tmp_path):
+    _save_checkpoint(tmp_path, tiny_config)
+    service = LocalInferenceService(tmp_path, device="cpu")
+
+    assert service.model.config.system_prompt == tiny_config.system_prompt
+    assert service.model.config.max_new_tokens == tiny_config.max_new_tokens
+
+
 def test_local_service_missing_checkpoint_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         LocalInferenceService(tmp_path / "does-not-exist", device="cpu")

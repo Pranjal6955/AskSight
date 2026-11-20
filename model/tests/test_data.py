@@ -1,5 +1,6 @@
 """Split-selection tests: whole-image groups, determinism, no leakage (B3)."""
 
+import json
 import random
 from collections import defaultdict
 
@@ -7,6 +8,7 @@ import pytest
 
 from asksight_model.data import (
     _assert_disjoint,
+    _write_split,
     group_by_image,
     image_filename,
     image_url,
@@ -89,3 +91,37 @@ def test_record_answers_shape_via_grouping():
     for record in records:
         by_question[record["question_id"]] += 1
     assert all(count == 1 for count in by_question.values())
+
+
+def _color_record() -> dict:
+    return {
+        "image_id": 7,
+        "question_id": 70,
+        "question": "What color is the cow?",
+        "answers": ["brown"] * 8 + ["black"] * 2,
+    }
+
+
+def test_write_split_sentence_targets_keep_short_answer(tmp_path):
+    path = tmp_path / "train.jsonl"
+    _write_split(path, [_color_record()], "train2014")
+    row = json.loads(path.read_text())
+
+    assert row["answer"] == "The cow is brown."
+    assert row["short_answer"] == "brown"
+    assert row["answer_style"] == "sentence"
+    assert row["answers"] == _color_record()["answers"]
+
+
+def test_write_split_short_style_reproduces_old_targets(tmp_path):
+    path = tmp_path / "train.jsonl"
+    _write_split(path, [_color_record()], "train2014", answer_style="short")
+    row = json.loads(path.read_text())
+
+    assert row["answer"] == "brown"
+    assert row["answer_style"] == "short"
+
+
+def test_write_split_rejects_unknown_style(tmp_path):
+    with pytest.raises(ValueError, match="answer_style"):
+        _write_split(tmp_path / "train.jsonl", [_color_record()], "train2014", "poetry")

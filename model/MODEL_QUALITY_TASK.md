@@ -88,25 +88,46 @@ release checkpoint.
 
 ## Current status
 
+Code-side groundwork is in place; the GPU experiments and human review are not.
 
-- `evaluations/asksight_v1.jsonl` freezes 26 cases: 18 direct VQA questions
-  with ten human references each, plus 8 image-description prompts with
-  manually written fact rubrics. The images are held-out COCO validation
-  images, so this is a reproducible proxy set, not a real-user photo set.
-- Saved v0.1 and v0.2 predictions were aligned on the 18 direct questions.
-  This narrow slice scored 40.7% and 42.6% VQA accuracy, respectively. The
-  full v0.2 held-out benchmark remains the better estimate (47.7% on 1,014
-  questions). Neither checkpoint's description prompts have been run yet.
-- The Colab/Kaggle notebook now prepares candidate `v0.3-vqa20k-cap10k` from
-  20k VQA questions, about 10k COCO train captions, and 200 image-disjoint
-  caption validation images. It also evaluates Qwen3-VL-2B-Instruct on the
-  same fixed AskSight cases.
+- `evaluations/asksight_v1.jsonl` (26 cases) was restored from the v0.3 saved
+  predictions with its hash in `evaluations/asksight_v1.sha256`: 18 direct VQA
+  questions with ten references each, plus 8 description prompts with fact
+  rubrics. The images are held-out COCO validation images, so this is a
+  reproducible proxy set, not a real-user photo set.
+- `asksight_model.data --answer-style sentence` rewrites common VQA forms into
+  complete sentences and keeps `short_answer` for scoring. The rewriter is
+  rule-based; its output still needs the planned 100-sample manual check.
+- `coco_captions --sentences-per-image 3` combines distinct captions into
+  multi-sentence description targets. The notebook enables this and accepts an
+  optional reviewed `EXTRA_EXAMPLES_FILE` for OCR/sign, unanswerable, and
+  real-photo examples.
+- `train.py --lora-rank 16` trains connector + LoRA and saves
+  `adapter_config.json`/`adapter_model.safetensors` in the checkpoint and
+  manifest. Serving loads the adapter when `config.yaml` records it.
+- Evaluation now reports exact VQA accuracy, containment VQA accuracy for
+  sentence answers, sentence rate, mean words, and a heuristic description
+  fact recall. Prompt and token limit are read from the checkpoint and recorded
+  in every run; service no longer substitutes a different prompt.
+- The notebook is parameterised for A/B/C: short vs sentence targets, and
+  connector-only vs LoRA, with the same split and evaluation set.
+
+Still required before release:
+
+- Spot-check rewritten targets and description captions (100+ samples).
+- Run A/B/C on the GPU, then D/E if color/text remain weak; record latency and
+  memory on the target serving hardware.
+- Add a counter-intuitive color set, several hundred consented real photos,
+  text-reading examples, and unanswerable examples.
+- Complete the manual description review and a POPE-style hallucination run.
+- Add fixed screenshots for the cow, dog/beach, and "describe" regressions.
 
 `evaluate --questions-file` and `evaluate_vlm` save the question-set hash,
-predictions, references/rubrics, prompt, model version, and serving measurements.
-The candidate training and Qwen3-VL inference require an Internet-enabled GPU
-runtime and have not been run here. The development machine has CPU-only PyTorch
-and about 2.7 GB available memory, which is not enough to safely load either
-full model. Do not select a release checkpoint until those runs finish and the
-description outputs have been reviewed against the fact rubrics. Add a separate
-consented real-photo set before making product-quality claims.
+predictions, references/rubrics, prompt, model version, and serving
+measurements. The candidate training and Qwen3-VL inference require an
+Internet-enabled GPU runtime and have not been run here. The development
+machine is CPU-only with about 2.7 GB available memory, which is not enough to
+safely load either full model. Do not select a release checkpoint until those
+runs finish and the description outputs have been reviewed against the fact
+rubrics. Add a separate consented real-photo set before making product-quality
+claims.
