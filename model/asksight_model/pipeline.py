@@ -24,16 +24,25 @@ from transformers import (
     CLIPVisionModel,
 )
 
-from .config import ModelConfig, validate_model_config
+from .config import DEFAULT_LORA_TARGETS, ModelConfig, validate_model_config
 
 IMAGE_SENTINEL = "<|asksight_image|>"
 PROJECTOR_FILE = "projector.safetensors"
 CONFIG_FILE = "config.yaml"
+ADAPTER_CONFIG_FILE = "adapter_config.json"
+ADAPTER_WEIGHTS_FILE = "adapter_model.safetensors"
 MANIFEST_FILE = "manifest.json"
 MANIFEST_FORMAT = 1
 # Immutable artifacts hashed by the manifest. metrics.json changes during
-# evaluation, so it is deliberately excluded.
-MANIFESTED_FILES = (PROJECTOR_FILE, CONFIG_FILE, "data_meta.json")
+# evaluation, so it is deliberately excluded. Adapter files only exist on
+# checkpoints trained with LoRA.
+MANIFESTED_FILES = (
+    PROJECTOR_FILE,
+    CONFIG_FILE,
+    ADAPTER_CONFIG_FILE,
+    ADAPTER_WEIGHTS_FILE,
+    "data_meta.json",
+)
 
 _DTYPES = {"float32": torch.float32, "float16": torch.float16, "bfloat16": torch.bfloat16}
 
@@ -105,13 +114,59 @@ class AskSightModel(nn.Module):
         self.lm.requires_grad_(False)
         self.vision.eval()
         self.lm.eval()
+        self.lora_enabled = False
+
+    @property
+    def _lm_base(self):
+        """The underlying PreTrainedModel, with or without a PEFT wrapper."""
+        return self.lm.get_base_model() if hasattr(self.lm, "get_base_model") else self.lm
+
+    def enable_lora(self, adapter_dir: Path | None = None) -> None:
+        """Attach LoRA adapters. `adapter_dir` loads saved weights for serving."""
+        if self.config.lora_rank is None:
+            raise ValueError("lora_rank is not set in the model config")
+        if self.lora_enabled:
+            return
+        try:
+            from peft import LoraConfig, PeftModel, get_peft_model
+        except ImportError as exc:
+            raise RuntimeError(
+                "LoRA requires the optional dependency: pip install -e '.[lora]'"
+            ) from exc
+
+        if adapter_dir is not None:
+            self.lm = PeftModel.from_pretrained(self.lm, str(adapter_dir), is_trainable=False)
+        else:
+            self.lm = get_peft_model(
+                self.lm,
+                LoraConfig(
+                    r=self.config.lora_rank,
+                    lora_alpha=self.config.lora_alpha,
+                    lora_dropout=self.config.lora_dropout,
+                    target_modules=list(self.config.lora_target_modules or DEFAULT_LORA_TARGETS),
+                    bias="none",
+                    task_type="CAUSAL_LM",
+                ),
+            )
+        self.lora_enabled = True
 
     def trainable_parameters(self):
-        return [p for p in self.connector.parameters() if p.requires_grad]
+        """Connector weights plus LoRA adapters when enabled."""
+        params = list(self.connector.parameters())
+        params.extend(p for p in self.lm.parameters() if p.requires_grad)
+        return params
+
+    def train_mode(self) -> None:
+        self.vision.eval()
+        self.connector.train()
+        if self.lora_enabled:
+            self.lm.train()
+        else:
+            self.lm.eval()
 
     def enable_gradient_checkpointing(self) -> None:
-        self.lm.gradient_checkpointing_enable()
-        self.lm.config.use_cache = False
+        self._lm_base.gradient_checkpointing_enable()
+        self._lm_base.config.use_cache = False
 
     # -- prompt assembly -------------------------------------------------
 
@@ -174,7 +229,7 @@ class AskSightModel(nn.Module):
         with torch.no_grad():  # vision tower is frozen
             features = self.vision(pixel_values=pixel_values).last_hidden_state
         projected = self.connector(features.to(self.connector.net[0].weight.dtype))
-        return projected.to(self.lm.dtype)
+        return projected.to(self._lm_base.dtype)
 
     def prepare_batch(
         self,
@@ -185,7 +240,7 @@ class AskSightModel(nn.Module):
         """Build inputs_embeds/attention_mask/labels for a batch (left-padded)."""
         image_embeds = self._image_embeds(images)  # (B, N, D)
         n_image = image_embeds.shape[1]
-        embed_text = self.lm.get_input_embeddings()
+        embed_text = self._lm_base.get_input_embeddings()
 
         samples = [
             self._encode_sample(q, a)
@@ -195,7 +250,11 @@ class AskSightModel(nn.Module):
         lengths = [len(p) + n_image + len(s) for p, s, _ in samples]
         max_len = max(lengths)
         embeds = torch.zeros(
-            len(samples), max_len, image_embeds.shape[-1], dtype=self.lm.dtype, device=self.device
+            len(samples),
+            max_len,
+            image_embeds.shape[-1],
+            dtype=self._lm_base.dtype,
+            device=self.device,
         )
         mask = torch.zeros(len(samples), max_len, dtype=torch.long, device=self.device)
         has_labels = answers is not None
@@ -267,12 +326,23 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _require_lora_files(path: Path, config: ModelConfig) -> None:
+    if config.lora_rank is None:
+        return
+    for name in (ADAPTER_CONFIG_FILE, ADAPTER_WEIGHTS_FILE):
+        if not (path / name).is_file():
+            raise FileNotFoundError(
+                f"checkpoint at {path} declares lora_rank={config.lora_rank} but is missing {name}"
+            )
+
+
 def write_manifest(path: Path) -> dict:
     """Hash the immutable checkpoint artifacts so downloads can be verified."""
     path = Path(path)
     for name in (PROJECTOR_FILE, CONFIG_FILE):
         if not (path / name).is_file():
             raise FileNotFoundError(f"checkpoint at {path} is missing {name}")
+    _require_lora_files(path, ModelConfig.load(path / CONFIG_FILE))
     files = {}
     for name in MANIFESTED_FILES:
         target = path / name
@@ -293,6 +363,7 @@ def verify_checkpoint(path: Path, require_manifest: bool = False) -> dict:
     for name in (PROJECTOR_FILE, CONFIG_FILE):
         if not (path / name).is_file():
             raise FileNotFoundError(f"checkpoint at {path} is missing {name}")
+    _require_lora_files(path, ModelConfig.load(path / CONFIG_FILE))
     manifest_path = path / MANIFEST_FILE
     if not manifest_path.is_file():
         if require_manifest:
@@ -327,9 +398,17 @@ def verify_checkpoint(path: Path, require_manifest: bool = False) -> dict:
 
 
 def save_checkpoint(path: Path, model: AskSightModel) -> None:
-    """Save connector weights plus config. Frozen backbones are re-fetched by pin."""
+    """Save connector weights, optional LoRA adapter, and config."""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
+    if model.config.lora_rank is not None:
+        if not model.lora_enabled:
+            raise ValueError("enable_lora() before saving a LoRA checkpoint")
+        model.lm.save_pretrained(str(path), safe_serialization=True)
+    else:
+        # Do not leave a previous run's adapter behind in an overwritten checkpoint.
+        (path / ADAPTER_CONFIG_FILE).unlink(missing_ok=True)
+        (path / ADAPTER_WEIGHTS_FILE).unlink(missing_ok=True)
     state = {k: v.contiguous().cpu() for k, v in model.connector.state_dict().items()}
     save_file(state, str(path / PROJECTOR_FILE))
     model.config.save(path / CONFIG_FILE)
@@ -337,8 +416,11 @@ def save_checkpoint(path: Path, model: AskSightModel) -> None:
 
 
 def load_projector(path: Path, model: AskSightModel) -> AskSightModel:
+    path = Path(path)
+    if model.config.lora_rank is not None:
+        model.enable_lora(adapter_dir=path)
     try:
-        state = load_file(str(Path(path) / PROJECTOR_FILE))
+        state = load_file(str(path / PROJECTOR_FILE))
     except SafetensorError as exc:
         raise ValueError(f"invalid {PROJECTOR_FILE} in {path}: {exc}") from exc
     try:

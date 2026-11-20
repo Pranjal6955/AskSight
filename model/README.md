@@ -4,10 +4,12 @@ Model quality work is tracked in [MODEL_QUALITY_TASK.md](./MODEL_QUALITY_TASK.md
 
 LLaVA-style visual question answering: a frozen CLIP vision encoder, a small
 trainable projection connector, and a frozen instruction-tuned language model.
-Only the connector is trained; a checkpoint is ~14 MB plus its config.
+The connector is always trained; optional LoRA adapters on the LM let it learn
+a new answer style without updating the full model. A connector-only checkpoint
+is ~14 MB plus its config; LoRA adds a small adapter.
 
 ```
-image -> CLIP (frozen) -> connector (trained) -> spliced into LM embeddings -> Qwen2.5 (frozen) -> answer
+image -> CLIP (frozen) -> connector (trained) -> spliced into LM embeddings -> Qwen2.5 (frozen + optional LoRA) -> answer
 ```
 
 ## Backbone selection (B1)
@@ -47,19 +49,26 @@ uv venv --python 3.12 .venv            # or: python3.12 -m venv .venv
 .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
 # GPU machine: install the CUDA build instead (see pytorch.org), then:
 .venv/bin/pip install -e ".[dev]"
+# Optional LoRA training/serving:
+.venv/bin/pip install -e ".[dev,lora]"
 ```
 
 ## Commands (run from `model/`)
 
 ```bash
 # 1. Data: official VQA v2 questions/annotations + only the needed COCO images.
-#    Produces train.jsonl / val.jsonl / test.jsonl with image-disjoint splits.
-python -m asksight_model.data --out data/vqa --train 20000 --val 1000 --test 1000
-# Larger run (use a distinct output directory and experiment version):
-python -m asksight_model.data --out data/vqa-50k --train 50000 --val 2000 --test 2000
+#    Produces train.jsonl / val.jsonl / test.jsonl with image-disjoint splits and
+#    complete-sentence targets; keep short_answer for scoring/review.
+python -m asksight_model.data --out data/vqa --train 20000 --val 1000 --test 1000 \
+  --answer-style sentence
+# Baseline reproduction (v0.3-style short targets):
+python -m asksight_model.data --out data/vqa-short --train 20000 --val 1000 --test 1000 \
+  --answer-style short
 
 # 2. Train the connector (2 epochs, batch 4, bf16 + gradient checkpointing by default).
 python -m asksight_model.train --config configs/default.yaml
+# Connector + LoRA (install the optional extra first: pip install -e ".[lora]"):
+python -m asksight_model.train --config configs/default.yaml --lora-rank 16 --version v0.4-lora
 
 # 3. Evaluate on the held-out test split (VQA accuracy + latency).
 python -m asksight_model.evaluate --checkpoint checkpoints/v0.1 --split test
@@ -185,8 +194,13 @@ the subset (per-image direct URLs, no 20 GB image-zip downloads).
   fingerprint of each split's question ids. `train` copies this into the
   checkpoint as `data_meta.json`.
 - Each JSONL record: `image` (path relative to the data dir), `question`,
-  `answer` (majority vote — the training target), `answers` (all 10
+  `answer` (the training target), `short_answer` (majority vote over the 10
+  annotations, kept for scoring/review), `answer_style`, `answers` (all 10
   annotations — the evaluation references), `image_id`, `question_id`.
+  `--answer-style sentence` restates common VQA question forms as complete
+  sentences (`The cow is black and white.`); `short` reproduces the old
+  fragment targets. The rewriter is rule-based, so spot-check samples before a
+  training run.
 - Licensing: VQA v2 annotations are CC BY 4.0; COCO images follow Flickr
   terms. Research/portfolio use only.
 
@@ -198,11 +212,13 @@ validates each epoch, and writes:
 
 ```
 checkpoints/<version>/
-├── projector.safetensors   # the only trained weights
-├── config.yaml             # backbone names + pinned revisions + prompt settings
-├── manifest.json           # sha256 + size of projector/config/data_meta
-├── metrics.json            # per-epoch losses, device, GPU model, configs
-├── data_meta.json          # exact split provenance
+├── projector.safetensors   # trained connector weights
+├── adapter_config.json     # LoRA only
+├── adapter_model.safetensors  # LoRA only
+├── config.yaml             # backbones + revisions + prompt + LoRA + token limit
+├── manifest.json           # sha256 + size of projector/config/adapter/data_meta
+├── metrics.json            # losses, device, GPU, trainable params, configs
+├── data_meta.json          # exact split provenance and answer style
 └── predictions_<split>.jsonl  # written by evaluate
 ```
 
@@ -227,17 +243,25 @@ Checkpoints created before manifests existed can be migrated once on a trusted
 local copy with `--write`, then verified strictly. `--write` records the current
 bytes, so run it only before distribution, not after a download.
 
-Release gate: follow [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md) before
-selecting a checkpoint for production.
+Before selecting a checkpoint for production, run `verify --strict`, confirm
+`config.yaml` holds the exact prompt/LoRA/token settings used for training, and
+confirm `metrics.json` has the held-out and AskSight evaluation results. Serving
+loads those settings from the checkpoint; it does not substitute a newer prompt
+or token limit.
 
 ## Evaluation (B6)
 
 `python -m asksight_model.evaluate` reports the standard VQA accuracy (the
 official answer normalization from the VQA v2 evaluation code is ported in
-`evaluate.py`), median/p95 inference latency, service cold-start time, process
-memory, and writes predictions. Results are recorded in `metrics.json` per
-checkpoint version. Latency is hardware-dependent — record it on the target
-deployment hardware, not a development box or Colab runtime.
+`evaluate.py`), a containment variant (`vqa_accuracy_contains`) that credits a
+sentence containing the short reference, the share of complete multi-word
+answers (`sentence_rate`), mean words, median/p95 inference latency, service
+cold-start time, process memory, and writes predictions. Exact `vqa_accuracy`
+collapses for sentence-trained checkpoints, so compare those candidates on
+`vqa_accuracy_contains` and `sentence_rate`; keep exact accuracy for
+short-answer baselines. Results are recorded in `metrics.json` per checkpoint
+version. Latency is hardware-dependent — record it on the target deployment
+hardware, not a development box or Colab runtime.
 
 `python -m asksight_model.robustness` re-runs the same held-out split under one
 realistic capture fault per condition — `clean`, `blur`, `dark`, `obstructed`,
@@ -270,21 +294,33 @@ python -m asksight_model.evaluate --checkpoint checkpoints/v0.1-colab \
 The evaluator writes `predictions_asksight_<set-name>.jsonl` and an
 `eval_asksight_<set-name>` entry to the checkpoint's `metrics.json`. The
 metrics include the set's SHA-256, checkpoint/model version, saved system
-prompt and token limit, and latency/memory measurements. Predictions preserve
-question IDs, categories, and image paths for manual review. The evaluator does
-not infer correctness from an expected answer: annotate a reviewed copy for
-correctness, image support, brevity/usefulness, and error type (including
-missed text and invented details), and report those judgments separately.
-Keep the exact set fixed when comparing candidates; do not tune on it if it is
-being used as the final test set.
+prompt and token limit, sentence rate, latency/memory, and a heuristic
+`fact_recall` for rows with `expected_facts`. Predictions preserve question
+IDs, categories, image paths, references, and rubrics for manual review.
+`fact_recall` only checks whether each rubric's content words appear in the
+answer, so annotate a reviewed copy for correctness, image support,
+brevity/usefulness, and error type (including missed text and invented
+details), and report those judgments separately. Keep the exact set fixed when
+comparing candidates; do not tune on it if it is being used as the final test
+set.
+
+`evaluations/asksight_v1.jsonl` is restored from the v0.3 saved predictions
+(26 cases); its hash is in `evaluations/asksight_v1.sha256`, and the evaluator
+also records the hash in every run.
 
 ## Prompt
 
-The current default asks for clear, grounded English. Direct answers should
-usually be one concise sentence; a request to describe a photo should receive
-three to five short sentences. The prompt comparison below tested older
-short-answer prompts on the smoke
-checkpoint; it does not measure the current conversational prompt:
+The current default asks for clear, grounded English. Direct answers should be
+one complete sentence, not a bare word; a request to describe a photo should
+receive three to five short sentences. Serving uses the prompt and token limit
+saved in the checkpoint's `config.yaml`, so training and serving cannot drift.
+Older checkpoints keep their older prompt; retrain to adopt the current one.
+
+`--answer-style sentence` (the default) rewrites common VQA targets into
+complete sentences and keeps the original short answer in `short_answer`. LoRA
+lets the LM learn that style; the connector-only recipe can still emit
+fragments. The prompt comparison below tested older short-answer prompts on the
+smoke checkpoint; it does not measure the current conversational prompt:
 
 | prompt | VQA accuracy | answers with non-ASCII characters |
 |---|---|---|
@@ -292,25 +328,27 @@ checkpoint; it does not measure the current conversational prompt:
 | **English, short phrase** | **0.200** | 5/30 |
 | English, one short sentence | 0.122 | 7/30 |
 
-The VQA training targets are mostly short answers, so a new prompt by itself
-does not teach the model to produce useful descriptions. Add image-description
-examples to training and compare those outputs on a fixed, manually reviewed
-set. Re-run `experiment_prompts.py` to measure prompt behavior against a
-release checkpoint before making accuracy claims.
+v0.3 was trained on mostly short VQA answers, so a new prompt alone did not
+teach it to produce complete sentences. New runs use sentence targets and
+description examples; compare those outputs on a fixed, manually reviewed set.
+A prompt still cannot fix visual accuracy. Re-run `experiment_prompts.py` to
+measure prompt behavior against a release checkpoint before making accuracy
+claims.
 
 ### Adding AskSight examples to training
 
-The Colab/Kaggle notebook accepts optional custom examples through
-`CUSTOM_EXAMPLES_FILE`. Put images under the notebook's `data/vqa/` directory
-and provide one JSONL row per example with `question_id`, `image_id`, `image`,
-`question`, and `answer`. Use unique string IDs for custom examples and keep
-their images separate from validation/test images. Direct question examples
-should have concise answers. For description examples, use a prompt such as
-“Describe this photo” and a grounded three-to-five-sentence caption. Set
-`CUSTOM_EXAMPLES_FILE` in the notebook configuration cell; the merge cell adds
-these rows to training only and records their file fingerprint in dataset
-metadata. Review captions carefully because incorrect descriptions train the
-model to repeat those errors.
+The notebook builds description rows from COCO captions (`CAPTION_SENTENCES`
+combines distinct captions per image). Add reviewed examples for text reading,
+unanswerable photos, or real AskSight questions through `EXTRA_EXAMPLES_FILE`.
+Put images under the notebook's `data/vqa/` directory and provide one JSONL row
+per example with `question_id`, `image_id`, `image`, `question`, and `answer`.
+Use unique string IDs and keep images separate from validation/test images.
+Direct examples should be complete sentences; text-reading examples should
+answer with the visible sign/label text; unanswerable examples should say the
+photo does not show enough to answer. The merge cell adds these rows to
+training only and records their file fingerprint in dataset metadata. Review
+captions carefully because incorrect descriptions train the model to repeat
+those errors.
 
 ## Inference service (B5)
 
@@ -324,7 +362,9 @@ All services satisfy the versioned in-process protocol
   ready only after that succeeds. Construction fails with a clear
   `FileNotFoundError`/`ValueError` for missing artifacts, manifest hash
   mismatches, unpinned remote backbones, out-of-range generation limits, or a
-  projector/config shape mismatch — before any traffic is served.
+  projector/config shape mismatch — before any traffic is served. LoRA
+  checkpoints load `adapter_model.safetensors` when `config.yaml` sets
+  `lora_rank`; install `pip install -e ".[lora]"` on that host.
 
 Request behavior:
 
@@ -380,11 +420,12 @@ Checklist for a serving host:
 
 ## Ambiguity, quality, and operational notes
 
-- The model is trained on a VQA subset and answers in English with a short
-  phrase (good for TTS). Answers can be plausibly wrong. On the 263-question
-  `v0.1-colab` test split, robustness drops were 0.5–1.1 accuracy points for
-  blur/dark/obstructed/low-res; the sample is small, so treat that as
-  indicative and re-measure the final checkpoint.
+- The released v0.3 checkpoint was trained on short VQA answers and often
+  replies with a fragment; it can also be plausibly wrong. New runs use
+  sentence targets, but no retrained candidate has been evaluated yet. On the
+  263-question `v0.1-colab` test split, robustness drops were 0.5–1.1 accuracy
+  points for blur/dark/obstructed/low-res; the sample is small, so treat that
+  as indicative and re-measure the final checkpoint.
 - Answer-verification policy: return the clarification answer when the model
   output is empty; otherwise do not fabricate confidence. Tell users that
   answers from blurry, dark, obstructed, or very low-resolution captures may be
@@ -406,6 +447,9 @@ Checklist for a serving host:
 - **`no answer tokens found in suffix`:** the LM's chat template is not
   prefix-stable (generation prompt is not a prefix of the full rendering), so
   answer labels cannot be aligned. Check the checkpoint's tokenizer.
+- **LoRA import or adapter error:** install `pip install -e ".[lora]"`; a
+  checkpoint whose `config.yaml` sets `lora_rank` must contain both adapter
+  files, and `verify --strict` fails if they are missing.
 - **Slow first run:** backbones download from Hugging Face once (~4 GB); set
   `HF_HOME` to control the cache location.
 - **`CLIPImageProcessor` fallback warning:** without `torchvision` installed,

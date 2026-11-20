@@ -21,6 +21,8 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from .targets import REWRITER_VERSION, SENTENCE_STYLE, SHORT_STYLE, to_sentence
+
 VQA_URLS = {
     "train": {
         "questions": "https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip",
@@ -150,20 +152,32 @@ def download_images(
     return kept
 
 
-def _write_split(path: Path, records: list[dict], images_subdir: str) -> None:
+def _write_split(
+    path: Path, records: list[dict], images_subdir: str, answer_style: str = SENTENCE_STYLE
+) -> None:
+    if answer_style not in (SENTENCE_STYLE, SHORT_STYLE):
+        raise ValueError(f"unknown answer_style {answer_style!r}")
     with open(path, "w") as handle:
         for record in records:
             image = image_filename(images_subdir, record["image_id"])
+            short_answer = sorted(
+                record["answers"],
+                key=lambda a: (-record["answers"].count(a), a),
+            )[0]
+            target = (
+                to_sentence(record["question"], short_answer)
+                if answer_style == SENTENCE_STYLE
+                else short_answer
+            )
             handle.write(
                 json.dumps(
                     {
                         "image": f"images/{images_subdir}/{image}",
                         "question": record["question"],
-                        # training target: majority vote over the 10 annotations
-                        "answer": sorted(
-                            record["answers"],
-                            key=lambda a: (-record["answers"].count(a), a),
-                        )[0],
+                        # training target; short_answer is kept for scoring and review
+                        "answer": target,
+                        "short_answer": short_answer,
+                        "answer_style": answer_style,
                         "answers": record["answers"],
                         "image_id": record["image_id"],
                         "question_id": record["question_id"],
@@ -195,7 +209,10 @@ def prepare(
     n_test: int = 250,
     seed: int = 0,
     jobs: int = 8,
+    answer_style: str = SENTENCE_STYLE,
 ) -> dict:
+    if answer_style not in (SENTENCE_STYLE, SHORT_STYLE):
+        raise ValueError(f"unknown answer_style {answer_style!r}")
     data_dir = Path(data_dir)
     cache_dir = data_dir / "_raw"
     paths = download_annotations(cache_dir)
@@ -219,11 +236,13 @@ def prepare(
     for name, records in splits.items():
         kept = download_images(records, coco_split[name], images_dir, jobs)
         splits[name] = kept
-        _write_split(data_dir / f"{name}.jsonl", kept, coco_split[name])
+        _write_split(data_dir / f"{name}.jsonl", kept, coco_split[name], answer_style)
         print(f"{name}: {len(kept)} questions, {len({r['image_id'] for r in kept})} images")
 
     meta = {
         "seed": seed,
+        "answer_style": answer_style,
+        "target_rewriter": REWRITER_VERSION if answer_style == SENTENCE_STYLE else None,
         "requested": {"train": n_train, "val": n_val, "test": n_test},
         "actual": {name: len(records) for name, records in splits.items()},
         "sources": VQA_URLS,
@@ -248,8 +267,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--test", type=int, default=250, help="number of held-out test questions")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--jobs", type=int, default=8, help="parallel image downloads")
+    parser.add_argument(
+        "--answer-style",
+        choices=(SENTENCE_STYLE, SHORT_STYLE),
+        default=SENTENCE_STYLE,
+        help="training targets: complete sentences or the original short VQA answer",
+    )
     args = parser.parse_args(argv)
-    prepare(args.out, args.train, args.val, args.test, args.seed, args.jobs)
+    prepare(
+        args.out,
+        args.train,
+        args.val,
+        args.test,
+        args.seed,
+        args.jobs,
+        args.answer_style,
+    )
     return 0
 
 

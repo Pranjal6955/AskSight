@@ -33,6 +33,18 @@ DEFAULT_SYSTEM_PROMPT = (
 # run unbounded (the service exposes no per-request token override).
 MAX_NEW_TOKENS_LIMIT = 128
 
+# Qwen2.5 attention + MLP projections. Checkpoints with other LMs must list
+# their own modules (the tiny test fixture uses GPT-2 names).
+DEFAULT_LORA_TARGETS = (
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+)
+
 
 @dataclass
 class ModelConfig:
@@ -46,6 +58,11 @@ class ModelConfig:
     connector_hidden: int | None = None  # default: LM hidden size
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     max_new_tokens: int = 128
+    # Optional LoRA on the LM. None keeps the original connector-only recipe.
+    lora_rank: int | None = None
+    lora_alpha: int = 32
+    lora_dropout: float = 0.05
+    lora_target_modules: list[str] | None = None  # default: DEFAULT_LORA_TARGETS
 
     @classmethod
     def from_dict(cls, data: dict) -> ModelConfig:
@@ -112,6 +129,18 @@ def validate_model_config(config: ModelConfig) -> None:
         )
     if config.connector_hidden is not None and config.connector_hidden <= 0:
         raise ValueError("connector_hidden must be positive when set")
+    if config.lora_rank is not None:
+        if config.lora_rank <= 0:
+            raise ValueError("lora_rank must be positive when set")
+        if config.lora_alpha <= 0:
+            raise ValueError("lora_alpha must be positive")
+        if not 0.0 <= config.lora_dropout < 1.0:
+            raise ValueError("lora_dropout must be in [0, 1)")
+        if config.lora_target_modules is not None and (
+            not config.lora_target_modules
+            or any(not str(name).strip() for name in config.lora_target_modules)
+        ):
+            raise ValueError("lora_target_modules must be a non-empty list of module names")
     for label, name, revision in (
         ("vision", config.vision_model, config.vision_revision),
         ("lm", config.lm_model, config.lm_revision),

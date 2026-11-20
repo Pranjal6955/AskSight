@@ -18,7 +18,6 @@ import statistics
 import time
 from pathlib import Path
 
-import yaml
 from PIL import Image
 
 from .service import LocalInferenceService
@@ -187,6 +186,7 @@ _PUNCT = [
 ]
 _PERIOD_STRIP = re.compile(r"(?!<=\d)(\.)(?!\d)")
 _COMMA_STRIP = re.compile(r"(\d)(\,)(\d)")
+_WORD_RE = re.compile(r"[A-Za-z0-9']+")
 
 
 def _process_punctuation(text: str) -> str:
@@ -225,6 +225,139 @@ def vqa_accuracy(predictions: list[str], references: list[list[str]]) -> float:
     return total / len(predictions)
 
 
+def answer_contains(prediction: str, reference: str) -> bool:
+    """Whether the normalized reference is a token subsequence of the prediction."""
+    predicted = normalize_answer(prediction).split()
+    expected = normalize_answer(reference).split()
+    if not predicted or not expected:
+        return False
+    size = len(expected)
+    return any(predicted[i : i + size] == expected for i in range(len(predicted) - size + 1))
+
+
+def vqa_accuracy_contains(predictions: list[str], references: list[list[str]]) -> float:
+    """VQA accuracy for sentence answers that contain the short reference.
+
+    The standard metric requires an exact answer match, so a correct sentence
+    scores zero against one-word references. This variant keeps the same
+    min(matches/3, 1) scoring but checks containment; for short predictions it
+    matches the standard metric.
+    """
+    if not predictions:
+        return 0.0
+    total = 0.0
+    for prediction, answers in zip(predictions, references, strict=True):
+        matches = sum(1 for answer in answers if answer_contains(prediction, answer))
+        total += min(matches / 3.0, 1.0)
+    return total / len(predictions)
+
+
+def is_complete_sentence(text: str) -> bool:
+    words = _WORD_RE.findall(text.strip())
+    return len(words) >= 2 and text.strip().endswith((".", "!", "?"))
+
+
+def sentence_rate(predictions: list[str]) -> float:
+    if not predictions:
+        return 0.0
+    return sum(is_complete_sentence(prediction) for prediction in predictions) / len(predictions)
+
+
+def mean_words(predictions: list[str]) -> float:
+    if not predictions:
+        return 0.0
+    return sum(len(_WORD_RE.findall(prediction)) for prediction in predictions) / len(predictions)
+
+
+_FACT_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "being",
+        "of",
+        "in",
+        "on",
+        "at",
+        "to",
+        "for",
+        "with",
+        "and",
+        "or",
+        "but",
+        "it",
+        "this",
+        "that",
+        "these",
+        "those",
+        "there",
+        "here",
+        "as",
+        "by",
+        "from",
+        "into",
+        "over",
+        "under",
+        "near",
+        "next",
+        "visible",
+        "image",
+        "photo",
+        "picture",
+        "main",
+        "subject",
+    }
+)
+
+
+def _content_terms(text: str) -> set[str]:
+    terms = set()
+    for word in re.findall(r"[a-z0-9]+", text.lower()):
+        if len(word) < 2 or word in _FACT_STOPWORDS:
+            continue
+        if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+            word = word[:-1]
+        terms.add(word)
+    return terms
+
+
+def fact_coverage(prediction: str, facts: list[str], threshold: float = 0.5) -> float | None:
+    """Heuristic share of expected facts whose content terms appear in the answer.
+
+    Facts are prose rubrics, so this is a review aid, not a correctness judge;
+    it reports how much of each fact's vocabulary is present.
+    """
+    if not facts:
+        return None
+    predicted = _content_terms(prediction)
+    hits = 0
+    for fact in facts:
+        terms = _content_terms(fact)
+        if terms and len(terms & predicted) / len(terms) >= threshold:
+            hits += 1
+    return hits / len(facts)
+
+
+def fact_metrics(rows: list[tuple[str, list[str] | None]]) -> dict:
+    scores = [
+        score
+        for prediction, facts in rows
+        if (score := fact_coverage(prediction, facts or [])) is not None
+    ]
+    if not scores:
+        return {}
+    return {
+        "fact_recall": round(sum(scores) / len(scores), 4),
+        "all_facts_rate": round(sum(score == 1.0 for score in scores) / len(scores), 4),
+    }
+
+
 def evaluate(
     checkpoint_dir: Path,
     data_dir: Path,
@@ -233,6 +366,8 @@ def evaluate(
     device: str = "auto",
 ) -> dict:
     records = load_jsonl(Path(data_dir) / f"{split}.jsonl")
+    # Caption validation rows added to val.jsonl have no VQA references.
+    records = [record for record in records if "answers" in record]
     if limit is not None:
         records = records[:limit]
     if not records:
@@ -251,14 +386,21 @@ def evaluate(
 
     latencies_sorted = sorted(latencies)
     stats = service.stats()
+    prompt = service.model.config.system_prompt
     result = {
         "split": split,
         "n": len(predictions),
         "vqa_accuracy": round(vqa_accuracy(predictions, references), 4),
+        "vqa_accuracy_contains": round(vqa_accuracy_contains(predictions, references), 4),
+        "sentence_rate": round(sentence_rate(predictions), 4),
+        "mean_words": round(mean_words(predictions), 1),
         "latency_median_s": round(statistics.median(latencies_sorted), 3),
         "latency_p95_s": round(latencies_sorted[int(0.95 * (len(latencies_sorted) - 1))], 3),
         "device": service.model.device.type,
         "model_version": service.model_version,
+        "system_prompt": prompt,
+        "system_prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "max_new_tokens": service.model.config.max_new_tokens,
         "startup_seconds": stats["startup_seconds"],
         "process_rss_mb": stats["process_rss_mb"],
     }
@@ -287,6 +429,8 @@ def evaluate(
                         "image_id": record["image_id"],
                         "question": record["question"],
                         "prediction": prediction,
+                        "short_answer": record.get("short_answer"),
+                        "answer_style": record.get("answer_style"),
                         "references": record["answers"],
                     }
                 )
@@ -334,27 +478,58 @@ def evaluate_questions(
         predictions.append(service.answer(image, record["question"]))
         latencies.append(time.perf_counter() - started)
 
-    config_path = Path(checkpoint_dir) / "config.yaml"
-    try:
-        config = yaml.safe_load(config_path.read_text()) or {}
-    except OSError:
-        config = {}
     latencies_sorted = sorted(latencies)
     stats = service.stats()
+    prompt = service.model.config.system_prompt
     result = {
         "evaluation": "asksight_questions",
         "question_set": questions_file.name,
         "question_set_sha256": hashlib.sha256(questions_file.read_bytes()).hexdigest(),
         "n": len(records),
         "model_version": service.model_version,
-        "system_prompt": config.get("system_prompt"),
-        "max_new_tokens": config.get("max_new_tokens"),
+        "system_prompt": prompt,
+        "system_prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "max_new_tokens": service.model.config.max_new_tokens,
         "device": service.model.device.type,
+        "sentence_rate": round(sentence_rate(predictions), 4),
+        "mean_words": round(mean_words(predictions), 1),
         "latency_median_s": round(statistics.median(latencies_sorted), 3),
         "latency_p95_s": round(latencies_sorted[int(0.95 * (len(latencies_sorted) - 1))], 3),
         "startup_seconds": stats["startup_seconds"],
         "process_rss_mb": stats["process_rss_mb"],
     }
+    direct = [
+        (record, prediction)
+        for record, prediction in zip(records, predictions, strict=True)
+        if isinstance(record.get("references"), list) and record["references"]
+    ]
+    if direct:
+        result["direct_vqa_n"] = len(direct)
+        result["direct_vqa_accuracy"] = round(
+            vqa_accuracy(
+                [prediction for _, prediction in direct],
+                [record["references"] for record, _ in direct],
+            ),
+            4,
+        )
+        result["direct_vqa_accuracy_contains"] = round(
+            vqa_accuracy_contains(
+                [prediction for _, prediction in direct],
+                [record["references"] for record, _ in direct],
+            ),
+            4,
+        )
+        result["direct_sentence_rate"] = round(
+            sentence_rate([prediction for _, prediction in direct]), 4
+        )
+    result.update(
+        fact_metrics(
+            [
+                (prediction, record.get("expected_facts"))
+                for record, prediction in zip(records, predictions, strict=True)
+            ]
+        )
+    )
     predictions_path = Path(checkpoint_dir) / f"predictions_asksight_{questions_file.stem}.jsonl"
     with predictions_path.open("w") as handle:
         for record, prediction in zip(records, predictions, strict=True):

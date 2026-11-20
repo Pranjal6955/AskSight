@@ -17,6 +17,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import shutil
 import time
 import urllib.error
@@ -84,6 +85,62 @@ def _load_captions(data_dir: Path, captions_json: Path | None) -> list[dict]:
         return json.loads(zf.read(member))["annotations"]
 
 
+def _caption_tokens(caption: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+", caption.lower()))
+
+
+def _distinct_captions(captions: list[dict], limit: int) -> list[str]:
+    """Pick up to `limit` captions that are not near-duplicates of each other."""
+    selected: list[str] = []
+    selected_tokens: list[set[str]] = []
+    for caption in captions:
+        text = " ".join(str(caption.get("caption", "")).split()).strip()
+        if not text:
+            continue
+        tokens = _caption_tokens(text)
+        if any(
+            len(tokens & other) / max(len(tokens | other), 1) > 0.6 for other in selected_tokens
+        ):
+            continue
+        selected.append(text if text.endswith((".", "!", "?")) else f"{text}.")
+        selected_tokens.append(tokens)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _description_rows(
+    image_id: int, captions: list[dict], limit: int, image_path: str
+) -> list[dict]:
+    if limit:
+        description = " ".join(_distinct_captions(captions, limit))
+        if not description:
+            return []
+        return [
+            {
+                "question_id": f"coco-caption-{image_id}",
+                "image_id": image_id,
+                "image": image_path,
+                "question": "Describe this photo.",
+                "answer": description,
+                "category": "description",
+                "source": "coco_captions_train2014",
+            }
+        ]
+    return [
+        {
+            "question_id": f"coco-caption-{caption['id']}",
+            "image_id": image_id,
+            "image": image_path,
+            "question": "Describe this photo.",
+            "answer": caption["caption"].strip(),
+            "category": "description",
+            "source": "coco_captions_train2014",
+        }
+        for caption in captions
+    ]
+
+
 def prepare(
     data_dir: Path,
     out_path: Path,
@@ -93,6 +150,7 @@ def prepare(
     seed: int = 0,
     captions_json: Path | None = None,
     jobs: int = 8,
+    sentences_per_image: int = 0,
 ) -> int:
     data_dir = Path(data_dir)
     out_path = Path(out_path)
@@ -100,6 +158,8 @@ def prepare(
         raise ValueError("num_images and val_images must be positive")
     if jobs < 1:
         raise ValueError("jobs must be positive")
+    if sentences_per_image < 0:
+        raise ValueError("sentences_per_image must be non-negative")
 
     held_out_ids: set[int] = set()
     for split_name in ("val", "test"):
@@ -159,18 +219,9 @@ def prepare(
             continue
         image_path = f"images/train2014/{paths[image_id].name}"
         target = train_records if image_id in train_ids else val_records
-        for caption in grouped[image_id]:
-            target.append(
-                {
-                    "question_id": f"coco-caption-{caption['id']}",
-                    "image_id": image_id,
-                    "image": image_path,
-                    "question": "Describe this photo.",
-                    "answer": caption["caption"].strip(),
-                    "category": "description",
-                    "source": "coco_captions_train2014",
-                }
-            )
+        target.extend(
+            _description_rows(image_id, grouped[image_id], sentences_per_image, image_path)
+        )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
@@ -183,9 +234,9 @@ def prepare(
             "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in val_records)
         )
     print(
-        f"wrote {len(train_records)} train captions from "
+        f"wrote {len(train_records)} train description rows from "
         f"{len(downloaded.intersection(train_ids))}/{num_images} images to {out_path}; "
-        f"wrote {len(val_records)} validation captions from "
+        f"wrote {len(val_records)} validation rows from "
         f"{len(downloaded.intersection(val_ids))}/{val_images} images"
         + (f" to {val_out_path}" if val_out_path is not None else "")
     )
@@ -204,6 +255,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--captions-json", type=Path)
     parser.add_argument("--jobs", type=int, default=8)
+    parser.add_argument(
+        "--sentences-per-image",
+        type=int,
+        default=0,
+        help="combine up to N distinct captions per image; 0 keeps one row per caption",
+    )
     args = parser.parse_args(argv)
     prepare(
         args.data_dir,
@@ -214,6 +271,7 @@ def main(argv: list[str] | None = None) -> int:
         args.seed,
         args.captions_json,
         args.jobs,
+        args.sentences_per_image,
     )
     return 0
 

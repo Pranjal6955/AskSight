@@ -1,11 +1,14 @@
 """Pipeline tests: frozen backbones, prompt assembly, generation, checkpoints (B2/B7)."""
 
 import json
+from dataclasses import replace
 
 import pytest
 import torch
 
 from asksight_model.pipeline import (
+    ADAPTER_CONFIG_FILE,
+    ADAPTER_WEIGHTS_FILE,
     AskSightModel,
     load_projector,
     save_checkpoint,
@@ -125,3 +128,63 @@ def test_verify_cli_migrates_an_old_checkpoint(tiny_config, tmp_path):
 
     assert main(["--checkpoint", str(tmp_path), "--write"]) == 0
     assert main(["--checkpoint", str(tmp_path), "--strict"]) == 0
+
+
+def _lora_config(tiny_config):
+    return replace(
+        tiny_config,
+        lora_rank=2,
+        lora_alpha=4,
+        lora_dropout=0.0,
+        lora_target_modules=["c_attn", "c_proj", "c_fc"],
+    )
+
+
+def test_lora_freezes_base_lm_and_trains_adapters(tiny_config, tiny_images, tiny_questions):
+    config = _lora_config(tiny_config)
+    model = AskSightModel(config, device="cpu", dtype="float32")
+    model.enable_lora()
+    model.train_mode()
+
+    assert model.lora_enabled
+    base_parameters = [
+        parameter for name, parameter in model._lm_base.named_parameters() if "lora_" not in name
+    ]
+    assert base_parameters
+    assert all(not parameter.requires_grad for parameter in base_parameters)
+    adapter_parameters = [p for p in model.lm.parameters() if p.requires_grad]
+    assert adapter_parameters
+    assert all(not p.requires_grad for p in model.vision.parameters())
+
+    loss = model(tiny_images, tiny_questions, ["brown", "two"])
+    loss.backward()
+    assert all(parameter.grad is None for parameter in base_parameters)
+    assert any(parameter.grad is not None for parameter in adapter_parameters)
+
+
+def test_lora_checkpoint_roundtrip(tiny_config, tiny_images, tiny_questions, tmp_path):
+    config = _lora_config(tiny_config)
+    model = AskSightModel(config, device="cpu", dtype="float32")
+    model.enable_lora()
+    expected = model.generate(tiny_images, tiny_questions)
+
+    save_checkpoint(tmp_path, model)
+    assert (tmp_path / ADAPTER_CONFIG_FILE).is_file()
+    assert (tmp_path / ADAPTER_WEIGHTS_FILE).is_file()
+    manifest = verify_checkpoint(tmp_path)
+    assert {ADAPTER_CONFIG_FILE, ADAPTER_WEIGHTS_FILE} <= set(manifest["files"])
+
+    restored = AskSightModel(config, device="cpu", dtype="float32")
+    load_projector(tmp_path, restored)
+    assert restored.lora_enabled
+    assert restored.generate(tiny_images, tiny_questions) == expected
+
+
+def test_lora_checkpoint_without_adapter_fails_verification(tiny_config, tmp_path):
+    model = AskSightModel(_lora_config(tiny_config), device="cpu", dtype="float32")
+    model.enable_lora()
+    save_checkpoint(tmp_path, model)
+    (tmp_path / ADAPTER_WEIGHTS_FILE).unlink()
+
+    with pytest.raises(FileNotFoundError, match="adapter_model.safetensors"):
+        verify_checkpoint(tmp_path)
