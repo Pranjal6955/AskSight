@@ -261,10 +261,6 @@ def evaluate(
         "model_version": service.model_version,
         "startup_seconds": stats["startup_seconds"],
         "process_rss_mb": stats["process_rss_mb"],
-        "answered": stats["answered"],
-        "abstained": stats["abstained"],
-        "abstain_rate": stats["abstain_rate"],
-        "confidence_median": stats["confidence_median"],
     }
     direct_rows = [
         (record, prediction)
@@ -358,10 +354,6 @@ def evaluate_questions(
         "latency_p95_s": round(latencies_sorted[int(0.95 * (len(latencies_sorted) - 1))], 3),
         "startup_seconds": stats["startup_seconds"],
         "process_rss_mb": stats["process_rss_mb"],
-        "answered": stats["answered"],
-        "abstained": stats["abstained"],
-        "abstain_rate": stats["abstain_rate"],
-        "confidence_median": stats["confidence_median"],
     }
     predictions_path = Path(checkpoint_dir) / f"predictions_asksight_{questions_file.stem}.jsonl"
     with predictions_path.open("w") as handle:

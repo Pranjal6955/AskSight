@@ -4,9 +4,7 @@ Model quality work is tracked in [MODEL_QUALITY_TASK.md](./MODEL_QUALITY_TASK.md
 
 LLaVA-style visual question answering: a frozen CLIP vision encoder, a small
 trainable projection connector, and a frozen instruction-tuned language model.
-The current v0.3 checkpoint trains the connector using VQA v2 and COCO caption
-examples; it does not use LoRA. See the v0.4 task plan before treating this as
-a production quality system.
+Only the connector is trained; a checkpoint is ~14 MB plus its config.
 
 ```
 image -> CLIP (frozen) -> connector (trained) -> spliced into LM embeddings -> Qwen2.5 (frozen) -> answer
@@ -60,31 +58,20 @@ python -m asksight_model.data --out data/vqa --train 20000 --val 1000 --test 100
 # Larger run (use a distinct output directory and experiment version):
 python -m asksight_model.data --out data/vqa-50k --train 50000 --val 2000 --test 2000
 
-# 2. Optional caption rows, image-disjoint from VQA val/test.
-python -m asksight_model.coco_captions --data-dir data/vqa \
-  --out data/asksight_coco_captions.jsonl --num-images 2000
-
-# 3. Train the connector (2 epochs, batch 4, bf16 + gradient checkpointing by default).
+# 2. Train the connector (2 epochs, batch 4, bf16 + gradient checkpointing by default).
 python -m asksight_model.train --config configs/default.yaml
 
-# 4. Evaluate on held-out VQA, fixed AskSight set, and image robustness.
-python -m asksight_model.evaluate --checkpoint checkpoints/v0.3-vqa20k-cap10k --split test
-python -m asksight_model.evaluate --checkpoint checkpoints/v0.3-vqa20k-cap10k \
-  --questions-file evaluations/asksight_v1.jsonl
-python -m asksight_model.robustness --checkpoint checkpoints/v0.3-vqa20k-cap10k --split test
+# 3. Evaluate on the held-out test split (VQA accuracy + latency).
+python -m asksight_model.evaluate --checkpoint checkpoints/v0.1 --split test
 
-# Qwen3-VL-2B is a separate evaluation-only baseline; it is not the service default.
-python -m asksight_model.evaluate_vlm --questions-file evaluations/asksight_v1.jsonl \
-  --output evaluations/runs/qwen3-vl-2b-asksight-v1.jsonl
+# 3b. Same split under capture faults (blur/dark/obstructed/low-res).
+python -m asksight_model.robustness --checkpoint checkpoints/v0.1 --split test
 
-# Calibrate confidence on validation data, then copy a chosen threshold to config.
-python -m asksight_model.calibrate_confidence --checkpoint checkpoints/v0.3-vqa20k-cap10k
+# 3c. Verify checkpoint artifacts against manifest.json (use --strict for release).
+python -m asksight_model.verify --checkpoint checkpoints/v0.1 --strict
 
-# 5. Verify checkpoint artifacts against manifest.json (use --strict for release).
-python -m asksight_model.verify --checkpoint checkpoints/v0.3-vqa20k-cap10k --strict
-
-# 6. Serve (Track A imports this):
-python -c "from asksight_model import LocalInferenceService; s = LocalInferenceService('checkpoints/v0.3-vqa20k-cap10k')"
+# 4. Serve (Track A imports this):
+python -c "from asksight_model import LocalInferenceService; s = LocalInferenceService('checkpoints/v0.1')"
 ```
 
 ## Training runs
@@ -291,26 +278,11 @@ missed text and invented details), and report those judgments separately.
 Keep the exact set fixed when comparing candidates; do not tune on it if it is
 being used as the final test set.
 
-## v0.3 results
-
-The saved v0.3 run used a Tesla T4 and a 1,014-question VQA test split. It
-reports 49.97% VQA accuracy, 0.286 s median and 0.365 s p95 generation latency,
-and 3,975 MB process RSS. The saved fixed set contains 26 proxy cases (18
-direct VQA and 8 descriptions). The older checkpoint's prompt did not reliably
-ground descriptions; its results are not a measure of the Phase 1 prompt or
-abstention changes. See `evaluations/runs/v0.2-v0.3-review.md` and
-`evaluations/runs/v0.3-vs-qwen3-vl-review.md` for caveats and qualitative
-review. These recorded GPU results are historical artifacts, not a new run.
-
-Qwen3-VL-2B remains an evaluation-only baseline. The app's serving candidate
-continues to be the local LLaVA-style pipeline until a separate decision is
-made.
-
 ## Prompt
 
-The current `grounded-short-v1` default asks for one complete short sentence,
-visible evidence only, careful image-grounded colors, and an explicit "I'm not
-sure" when uncertain. The prompt comparison below tested older
+The current default asks for clear, grounded English. Direct answers should
+usually be one concise sentence; a request to describe a photo should receive
+three to five short sentences. The prompt comparison below tested older
 short-answer prompts on the smoke
 checkpoint; it does not measure the current conversational prompt:
 
@@ -342,14 +314,8 @@ model to repeat those errors.
 
 ## Inference service (B5)
 
-All services satisfy the in-process protocol
-`{protocol_version, model_version: str, answer(image, question, history=None) -> str}`.
-The optional history is a list of `Turn(question, answer)` pairs; at most the
-six most recent turns and a 1,024-token history budget are included. Oldest
-turns are dropped first. The image sentinel is inserted once, in the first user
-turn. `.answer()` keeps returning a string for existing callers; callers that
-need metadata can use `.answer_with_metadata()` for an `AnswerResponse` with
-`confidence`, `first_token_probability`, and `abstained` fields.
+All services satisfy the versioned in-process protocol
+`{protocol_version, model_version: str, answer(image: PIL.Image, question: str) -> str}`:
 
 - `MockInferenceService` — deterministic placeholder so Track A can build the
   full flow before training completes. Clearly marked, not a real model.
@@ -372,16 +338,9 @@ Request behavior:
   not interruptible mid-call; its work is bounded by the token limit. Empty or
   degenerate output returns `CLARIFY_ANSWER` ("ask again") rather than asserting
   a guess.
-- Questions are normalized conservatively before generation, and stats retains
-  a bounded log of original and normalized text. The current confidence is the
-  geometric mean of greedy generated-token probabilities; this is a cheap
-  signal, not a calibrated probability of correctness. `confidence_threshold`
-  defaults to `0.0` as an explicit placeholder, so automatic abstention stays
-  disabled until `calibrate_confidence.py` is run on `val.jsonl` and a reviewed
-  threshold is configured. When crossed, the response is an `UNSURE` answer and
-  `abstained` is counted in `stats()`.
 - Invalid input raises `ValueError`; inference failures propagate. Track A maps
-  these to API errors.
+  these to API errors. There is deliberately **no calibrated confidence score**
+  until an evaluated method exists (Track A6).
 - `stats()` returns request/failure/timeout counts, queue/generation/latency
   median and p95 over the last 1024 generation requests, cold-start seconds,
   RSS memory, model version, and readiness. Use it for health/readiness
@@ -421,23 +380,24 @@ Checklist for a serving host:
 
 ## Ambiguity, quality, and operational notes
 
-- The model is trained on VQA and COCO caption subsets and answers in English
-  with a complete short sentence. Answers can still be plausibly wrong. On the 263-question
+- The model is trained on a VQA subset and answers in English with a short
+  phrase (good for TTS). Answers can be plausibly wrong. On the 263-question
   `v0.1-colab` test split, robustness drops were 0.5–1.1 accuracy points for
   blur/dark/obstructed/low-res; the sample is small, so treat that as
   indicative and re-measure the final checkpoint.
-- Answer-verification policy: empty output returns `CLARIFY_ANSWER`; a
-  generation below a validation-calibrated threshold returns `UNSURE_ANSWER`.
-  Token likelihood is only a ranking signal until calibration demonstrates its
-  accuracy/coverage behavior on representative data. The checked-in default
-  threshold is a placeholder, not a release setting.
+- Answer-verification policy: return the clarification answer when the model
+  output is empty; otherwise do not fabricate confidence. Tell users that
+  answers from blurry, dark, obstructed, or very low-resolution captures may be
+  wrong and should be verified, because no calibrated image- or answer-quality
+  score has been evaluated yet. Revisit this policy with the final checkpoint's
+  robustness numbers and the agreed product threshold.
 - Language: VQA v2 is English-only, and so is the model's output. Multilingual
   support belongs to the Sarvam STT/TTS layer (Track A), which can translate
   around the English VQA core. Arbitrarily long or malformed questions are
   rejected by input validation; multilingual questions are accepted as text.
-- Ambiguous questions may still yield a guess when the confidence signal stays
-  above the configured threshold; review this behavior on the fixed set and
-  validation calibration curve before release.
+- Ambiguous questions yield a short guess, not a clarification, unless the
+  output is empty. A clarification heuristic beyond the empty-output guard
+  needs evaluation first.
 
 ## Troubleshooting
 

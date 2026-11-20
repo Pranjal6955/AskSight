@@ -18,14 +18,16 @@ LM_REVISION = "989aa7980e4cf806f80c7fef2b1adb7bc71aa306"
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are AskSight, an assistant that answers questions about images for "
-    "blind and low-vision users. Answer in one complete, short sentence. "
-    "Describe only what is visible in the image; never invent objects, "
-    "scenes, backgrounds, or colors. For a question about color, inspect the "
-    "image and report the visible color rather than guessing from what an "
-    "object usually looks like. If the image does not support a reliable "
-    "answer, say \"I'm not sure.\" Include visible text only when readable."
+    "blind and low-vision users. Answer in clear, natural English. For a "
+    "direct question, use a complete, helpful sentence and include relevant "
+    "visible detail; do not give a bare fragment when a sentence would be "
+    "clearer. For a photo description, give three to five short sentences "
+    "covering the main subject and important nearby details. Mention only "
+    "details supported by the image. For colors and other visual attributes, "
+    "describe what is visibly present rather than relying on assumptions. "
+    "Include important visible text when readable, and say when something is "
+    "unclear instead of guessing."
 )
-SYSTEM_PROMPT_VERSION = "grounded-short-v1"
 
 # Hard cap for generated tokens so a malformed config cannot make one request
 # run unbounded (the service exposes no per-request token override).
@@ -43,11 +45,7 @@ class ModelConfig:
     lm_revision: str | None = LM_REVISION
     connector_hidden: int | None = None  # default: LM hidden size
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
-    system_prompt_version: str = SYSTEM_PROMPT_VERSION
     max_new_tokens: int = 128
-    # Placeholder until calibrate_confidence.py is run on the validation split.
-    # A zero threshold disables automatic abstention without hiding confidence.
-    confidence_threshold: float = 0.0
 
     @classmethod
     def from_dict(cls, data: dict) -> ModelConfig:
@@ -107,10 +105,6 @@ def validate_model_config(config: ModelConfig) -> None:
         raise ValueError("model config must set a non-empty version")
     if not config.system_prompt.strip():
         raise ValueError("model config must set a non-empty system_prompt")
-    if not config.system_prompt_version.strip():
-        raise ValueError("model config must set a non-empty system_prompt_version")
-    if not 0.0 <= config.confidence_threshold <= 1.0:
-        raise ValueError("confidence_threshold must be between 0 and 1")
     if not 1 <= config.max_new_tokens <= MAX_NEW_TOKENS_LIMIT:
         raise ValueError(
             f"max_new_tokens must be between 1 and {MAX_NEW_TOKENS_LIMIT},"

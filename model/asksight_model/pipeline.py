@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 from pathlib import Path
 
 import torch
@@ -28,8 +27,6 @@ from transformers import (
 from .config import ModelConfig, validate_model_config
 
 IMAGE_SENTINEL = "<|asksight_image|>"
-MAX_HISTORY_TURNS = 6
-HISTORY_TOKEN_BUDGET = 1024
 PROJECTOR_FILE = "projector.safetensors"
 CONFIG_FILE = "config.yaml"
 MANIFEST_FILE = "manifest.json"
@@ -118,47 +115,17 @@ class AskSightModel(nn.Module):
 
     # -- prompt assembly -------------------------------------------------
 
-    def _bounded_history(self, history: list[tuple[str, str]] | None) -> list[tuple[str, str]]:
-        """Keep recent complete turns within a small prompt-token budget."""
-        if not history:
-            return []
-        turns = [(str(q), str(a)) for q, a in history[-MAX_HISTORY_TURNS:]]
-        while turns:
-            token_count = sum(
-                len(self.tokenizer(f"{question} {answer}", add_special_tokens=False)["input_ids"])
-                for question, answer in turns
-            )
-            if token_count <= HISTORY_TOKEN_BUDGET:
-                break
-            turns.pop(0)
-        return turns
-
-    def _chat_texts(
-        self,
-        question: str,
-        answer: str | None,
-        history: list[tuple[str, str]] | None = None,
-    ) -> tuple[str, str]:
+    def _chat_texts(self, question: str, answer: str | None) -> tuple[str, str]:
         """Return (ask_text, full_text).
 
         `ask_text` ends right after the assistant header (generation prompt);
         `full_text` additionally contains the answer. Both share the image
         sentinel at the same position.
         """
-        bounded_history = self._bounded_history(history)
-        messages = [{"role": "system", "content": self.config.system_prompt}]
-        for turn_index, (prior_question, prior_answer) in enumerate(bounded_history):
-            user_content = (
-                f"{IMAGE_SENTINEL}\n{prior_question}" if turn_index == 0 else prior_question
-            )
-            messages.extend(
-                [
-                    {"role": "user", "content": user_content},
-                    {"role": "assistant", "content": prior_answer},
-                ]
-            )
-        current_content = f"{IMAGE_SENTINEL}\n{question}" if not bounded_history else question
-        messages.append({"role": "user", "content": current_content})
+        messages = [
+            {"role": "system", "content": self.config.system_prompt},
+            {"role": "user", "content": f"{IMAGE_SENTINEL}\n{question}"},
+        ]
         ask_text = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -176,10 +143,10 @@ class AskSightModel(nn.Module):
         return enc["input_ids"], enc["offset_mapping"]
 
     def _encode_sample(
-        self, question: str, answer: str | None, history: list[tuple[str, str]] | None = None
+        self, question: str, answer: str | None
     ) -> tuple[list[int], list[int], list[int] | None]:
         """Tokenize one sample into prefix ids, suffix ids, and suffix labels."""
-        ask_text, full_text = self._chat_texts(question, answer, history)
+        ask_text, full_text = self._chat_texts(question, answer)
         prefix_text, ask_suffix = ask_text.split(IMAGE_SENTINEL, 1)
         prefix_ids, _ = self._tokenize(prefix_text)
         if answer is None:
@@ -214,7 +181,6 @@ class AskSightModel(nn.Module):
         images: list[Image.Image],
         questions: list[str],
         answers: list[str] | None = None,
-        histories: list[list[tuple[str, str]] | None] | None = None,
     ) -> dict[str, torch.Tensor | None]:
         """Build inputs_embeds/attention_mask/labels for a batch (left-padded)."""
         image_embeds = self._image_embeds(images)  # (B, N, D)
@@ -222,13 +188,8 @@ class AskSightModel(nn.Module):
         embed_text = self.lm.get_input_embeddings()
 
         samples = [
-            self._encode_sample(q, a, h)
-            for q, a, h in zip(
-                questions,
-                answers or [None] * len(questions),
-                histories or [None] * len(questions),
-                strict=True,
-            )
+            self._encode_sample(q, a)
+            for q, a in zip(questions, answers or [None] * len(questions), strict=True)
         ]
 
         lengths = [len(p) + n_image + len(s) for p, s, _ in samples]
@@ -283,60 +244,18 @@ class AskSightModel(nn.Module):
         questions: list[str],
         max_new_tokens: int | None = None,
     ) -> list[str]:
-        return [
-            item[0]
-            for item in self.generate_with_confidence(
-                images, questions, max_new_tokens=max_new_tokens
-            )
-        ]
-
-    @torch.inference_mode()
-    def generate_with_confidence(
-        self,
-        images: list[Image.Image],
-        questions: list[str],
-        histories: list[list[tuple[str, str]] | None] | None = None,
-        max_new_tokens: int | None = None,
-    ) -> list[tuple[str, float, float]]:
-        """Return text, geometric-mean token probability, and first-token probability."""
         self.vision.eval()
         self.lm.eval()
-        batch = self.prepare_batch(images, questions, histories=histories)
+        batch = self.prepare_batch(images, questions)
         output = self.lm.generate(
             inputs_embeds=batch["inputs_embeds"],
             attention_mask=batch["attention_mask"],
             max_new_tokens=max_new_tokens or self.config.max_new_tokens,
             do_sample=False,  # greedy: deterministic and reproducible
             pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
-            output_scores=True,
-            return_dict_in_generate=True,
         )
-        texts = self.tokenizer.batch_decode(output.sequences, skip_special_tokens=True)
-        generated = (
-            output.sequences[:, -len(output.scores) :]
-            if output.scores
-            else output.sequences[:, :0]
-        )
-        token_log_probs = []
-        first_probabilities = []
-        for token_index, scores in enumerate(output.scores):
-            log_probs = torch.log_softmax(scores.float(), dim=-1)
-            chosen = generated[:, token_index]
-            selected = log_probs.gather(1, chosen[:, None]).squeeze(1)
-            token_log_probs.append(selected)
-            if token_index == 0:
-                first_probabilities = selected.exp().tolist()
-        if token_log_probs:
-            mean_log_probs = torch.stack(token_log_probs, dim=1).mean(dim=1).tolist()
-            confidences = [math.exp(value) for value in mean_log_probs]
-        else:
-            confidences = [0.0] * len(texts)
-            first_probabilities = [0.0] * len(texts)
         return [
-            (text.strip(), float(confidence), float(first_probability))
-            for text, confidence, first_probability in zip(
-                texts, confidences, first_probabilities, strict=True
-            )
+            text.strip() for text in self.tokenizer.batch_decode(output, skip_special_tokens=True)
         ]
 
 

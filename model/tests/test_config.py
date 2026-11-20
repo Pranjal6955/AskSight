@@ -6,23 +6,20 @@ from asksight_model.config import (
     DEFAULT_SYSTEM_PROMPT,
     MAX_NEW_TOKENS_LIMIT,
     ModelConfig,
-    SYSTEM_PROMPT_VERSION,
     load_configs,
     validate_model_config,
 )
 
 
 def test_default_prompt_requires_english_and_clear_short_sentences():
+    # The mobile TTS layer speaks English only; answers should be useful aloud.
     prompt = DEFAULT_SYSTEM_PROMPT.lower()
-    assert "complete, short sentence" in prompt
-    assert "never invent" in prompt
-    assert "i'm not sure" in prompt
-    assert "color" in prompt and "image" in prompt
+    assert "english" in prompt
+    assert "short sentences" in prompt
 
 
 def test_default_config_uses_the_default_prompt():
     assert ModelConfig().system_prompt == DEFAULT_SYSTEM_PROMPT
-    assert ModelConfig().system_prompt_version == SYSTEM_PROMPT_VERSION
 
 
 def test_configs_default_yaml_loads(tmp_path):
@@ -65,10 +62,3 @@ def test_validate_rejects_empty_version_and_prompt():
         validate_model_config(ModelConfig(version="  "))
     with pytest.raises(ValueError, match="system_prompt"):
         validate_model_config(ModelConfig(system_prompt=""))
-    with pytest.raises(ValueError, match="system_prompt_version"):
-        validate_model_config(ModelConfig(system_prompt_version=" "))
-
-
-def test_validate_rejects_invalid_confidence_threshold():
-    with pytest.raises(ValueError, match="confidence_threshold"):
-        validate_model_config(ModelConfig(confidence_threshold=1.1))

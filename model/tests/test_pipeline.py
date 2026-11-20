@@ -68,29 +68,6 @@ def test_generate_respects_max_new_tokens(tiny_model, tiny_images, tiny_question
     assert all(len(output.split()) <= 1 for output in outputs)
 
 
-def test_followup_prompt_keeps_context_and_one_image_sentinel(tiny_model):
-    prompt, _ = tiny_model._chat_texts(
-        "what color is it?", None, [("what animal is this?", "A cow.")]
-    )
-    assert "what animal is this?" in prompt
-    assert "A cow." in prompt
-    assert "what color is it?" in prompt
-    assert prompt.count("<|asksight_image|>") == 1
-
-
-def test_history_keeps_six_recent_turns_and_truncates_oldest(tiny_model):
-    history = [(f"question {index}", f"answer {index}") for index in range(8)]
-    bounded = tiny_model._bounded_history(history)
-    assert len(bounded) == 6
-    assert bounded[0] == ("question 2", "answer 2")
-
-
-def test_history_token_budget_drops_oldest_turns(tiny_model):
-    history = [("old " * 1100, "old answer"), ("recent?", "recent answer")]
-    bounded = tiny_model._bounded_history(history)
-    assert bounded == [("recent?", "recent answer")]
-
-
 def test_checkpoint_roundtrip(tiny_config, tiny_images, tiny_questions, tmp_path):
     model = AskSightModel(tiny_config, device="cpu", dtype="float32")
     with torch.no_grad():
