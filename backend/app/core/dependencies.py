@@ -9,9 +9,8 @@ from app.db import db
 bearer_schema = HTTPBearer()
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_schema)):
-    token = credentials.credentials
-
+async def get_user_from_token(token: str):
+    """Resolve a bearer access token to its user, or raise 401."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if payload.get("type") == REFRESH_TOKEN_TYPE:
@@ -31,3 +30,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(b
         raise HTTPException(status_code=401, detail="User not found")
 
     return user
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_schema)):
+    return await get_user_from_token(credentials.credentials)

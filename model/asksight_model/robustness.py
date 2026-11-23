@@ -57,6 +57,7 @@ def run(
     conditions: tuple[str, ...] = CONDITIONS,
     limit: int | None = None,
     device: str = "auto",
+    dtype: str = "auto",
 ) -> dict:
     records = load_jsonl(Path(data_dir) / f"{split}.jsonl")
     # Caption validation rows added to val.jsonl have no VQA references.
@@ -66,7 +67,7 @@ def run(
     if not records:
         raise ValueError(f"no records for split {split!r} in {data_dir}")
 
-    service = LocalInferenceService(checkpoint_dir, device=device)
+    service = LocalInferenceService(checkpoint_dir, device=device, dtype=dtype)
     images = [Image.open(Path(data_dir) / record["image"]).convert("RGB") for record in records]
     references = [record["answers"] for record in records]
 
@@ -121,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--conditions", nargs="+", default=list(CONDITIONS))
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--dtype", default="auto")
     args = parser.parse_args(argv)
     summary = run(
         args.checkpoint,
@@ -129,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         tuple(args.conditions),
         args.limit,
         args.device,
+        args.dtype,
     )
     print(json.dumps(summary, indent=2))
     return 0

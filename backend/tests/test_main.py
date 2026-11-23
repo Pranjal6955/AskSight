@@ -22,6 +22,7 @@ class TestRouting(unittest.TestCase):
                 "/auth/refresh",
                 "/auth/logout",
                 "/auth/me",
+                "/admin/overview",
                 "/images",
                 "/images/{image_id}",
                 "/ask",

@@ -364,6 +364,7 @@ def evaluate(
     split: str = "test",
     limit: int | None = None,
     device: str = "auto",
+    dtype: str = "auto",
 ) -> dict:
     records = load_jsonl(Path(data_dir) / f"{split}.jsonl")
     # Caption validation rows added to val.jsonl have no VQA references.
@@ -373,7 +374,7 @@ def evaluate(
     if not records:
         raise ValueError(f"no records for split {split!r} in {data_dir}")
 
-    service = LocalInferenceService(checkpoint_dir, device=device)
+    service = LocalInferenceService(checkpoint_dir, device=device, dtype=dtype)
     predictions, references, latencies = [], [], []
     for record in records:
         image = Image.open(Path(data_dir) / record["image"]).convert("RGB")
@@ -450,6 +451,7 @@ def evaluate_questions(
     questions_file: Path,
     limit: int | None = None,
     device: str = "auto",
+    dtype: str = "auto",
 ) -> dict:
     """Generate predictions for a fixed, hand-curated AskSight question set.
 
@@ -470,7 +472,7 @@ def evaluate_questions(
             if not isinstance(record.get(field), str) or not record[field].strip():
                 raise ValueError(f"record {index} must have a non-empty {field!r}")
 
-    service = LocalInferenceService(checkpoint_dir, device=device)
+    service = LocalInferenceService(checkpoint_dir, device=device, dtype=dtype)
     predictions, latencies = [], []
     for record in records:
         image = Image.open(questions_file.parent / record["image"]).convert("RGB")
@@ -563,6 +565,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", default="test", choices=["val", "test"])
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--device", default="auto")
+    parser.add_argument("--dtype", default="auto")
     parser.add_argument(
         "--questions-file",
         type=Path,
@@ -570,9 +573,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     if args.questions_file:
-        evaluate_questions(args.checkpoint, args.questions_file, args.limit, args.device)
+        evaluate_questions(
+            args.checkpoint, args.questions_file, args.limit, args.device, args.dtype
+        )
     else:
-        evaluate(args.checkpoint, args.data_dir, args.split, args.limit, args.device)
+        evaluate(
+            args.checkpoint, args.data_dir, args.split, args.limit, args.device, args.dtype
+        )
     return 0
 
 

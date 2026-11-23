@@ -29,6 +29,7 @@ Edit `.env` and set at least:
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
 JWT="a-long-random-secret-at-least-32-characters"
+ADMIN_EMAILS="pranjal@admin.com"
 ```
 
 Generate a suitable JWT secret with:
@@ -69,9 +70,26 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 The API is available at <http://localhost:8000>.
 
 - Swagger UI: <http://localhost:8000/docs>
+- Dashboard: <http://localhost:8000/dashboard/>
 - Liveness: <http://localhost:8000/health/live>
 - Readiness: <http://localhost:8000/health/ready>
 - Model status: <http://localhost:8000/health/model>
+
+The test console needs a build first: `cd admin-dashboard && npm install && npm run build`.
+For local frontend work, `npm run dev` serves it on <http://localhost:5173> and
+proxies `/auth`, `/images`, `/ask`, `/health` and `/admin` to the API.
+
+The dashboard's Usage tab signs in with an admin account. Create or reset the
+default one (local development only) with:
+
+```bash
+python -m scripts.seed_admin
+```
+
+That creates `pranjal@admin.com` / `admin12345`; pass an email and password to
+override them, and change the password before exposing the API. The account's
+email must be listed in `ADMIN_EMAILS`. A shared `X-Admin-Token` (`ADMIN_TOKEN`)
+also works for scripts and curl.
 
 `/health/ready` requires both the database and inference service to be
 available.
