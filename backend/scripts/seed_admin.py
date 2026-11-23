@@ -36,7 +36,7 @@ async def seed(email: str, password: str) -> str:
 
 
 async def main() -> None:
-    email = (sys.argv[1] if len(sys.argv) > 1 else os.getenv("ADMIN_EMAIL", DEFAULT_EMAIL))
+    email = sys.argv[1] if len(sys.argv) > 1 else os.getenv("ADMIN_EMAIL", DEFAULT_EMAIL)
     password = sys.argv[2] if len(sys.argv) > 2 else os.getenv("ADMIN_PASSWORD", DEFAULT_PASSWORD)
     email = email.strip().lower()
 

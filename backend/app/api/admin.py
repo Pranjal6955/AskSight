@@ -26,9 +26,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 ADMIN_TOKEN_ENV = "ADMIN_TOKEN"
 ADMIN_EMAILS_ENV = "ADMIN_EMAILS"
-ADMIN_DISABLED = (
-    "The admin view is disabled. Set ADMIN_EMAILS or ADMIN_TOKEN on the backend."
-)
+ADMIN_DISABLED = "The admin view is disabled. Set ADMIN_EMAILS or ADMIN_TOKEN on the backend."
 INVALID_ADMIN_CREDENTIALS = "Invalid admin credentials."
 
 MAX_USERS = 100  # shortcut: table shows the newest 100 users, paginate when the base grows
@@ -48,18 +46,14 @@ async def require_admin(
     expected = os.getenv(ADMIN_TOKEN_ENV, "")
     emails = admin_emails()
     if not expected and not emails:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=ADMIN_DISABLED
-        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=ADMIN_DISABLED)
     if expected and x_admin_token and secrets.compare_digest(x_admin_token, expected):
         return
     if credentials and emails:
         user = await get_user_from_token(credentials.credentials)
         if user.email.strip().lower() in emails:
             return
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_ADMIN_CREDENTIALS
-    )
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_ADMIN_CREDENTIALS)
 
 
 def _count(row: dict) -> int:
@@ -78,9 +72,7 @@ async def overview(recent: int = Query(25, ge=1, le=100)):
     history_rows = await db.historyentry.group_by(
         by=["ownerId"], count={"id": True}, max={"createdAt": True}
     )
-    model_rows = await db.historyentry.group_by(
-        by=["modelVersion"], count={"id": True}
-    )
+    model_rows = await db.historyentry.group_by(by=["modelVersion"], count={"id": True})
     users = await db.user.find_many(
         take=MAX_USERS,
         order={"createdAt": "desc"},
@@ -139,8 +131,7 @@ async def overview(recent: int = Query(25, ge=1, le=100)):
             images=await db.image.count(),
             questions=await db.historyentry.count(),
             storage_bytes=sum(
-                int((row.get("_sum") or {}).get("sizeBytes") or 0)
-                for row in image_rows
+                int((row.get("_sum") or {}).get("sizeBytes") or 0) for row in image_rows
             ),
         ),
         users=usage,

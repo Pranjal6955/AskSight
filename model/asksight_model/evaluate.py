@@ -577,9 +577,7 @@ def main(argv: list[str] | None = None) -> int:
             args.checkpoint, args.questions_file, args.limit, args.device, args.dtype
         )
     else:
-        evaluate(
-            args.checkpoint, args.data_dir, args.split, args.limit, args.device, args.dtype
-        )
+        evaluate(args.checkpoint, args.data_dir, args.split, args.limit, args.device, args.dtype)
     return 0
 
 
