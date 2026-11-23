@@ -82,7 +82,7 @@ class ModelConfig:
 
 @dataclass
 class TrainConfig:
-    """Projection-connector training settings (B4)."""
+    """Projection-connector and LoRA training settings."""
 
     data_dir: str = "data/vqa"
     out_dir: str = "checkpoints"
@@ -90,11 +90,16 @@ class TrainConfig:
     epochs: int = 2
     batch_size: int = 4
     lr: float = 5e-4
+    lora_lr: float | None = None  # if None, defaults to lr / 10 when LoRA is enabled
+    warmup_ratio: float = 0.05
     weight_decay: float = 0.0
     seed: int = 0
     device: str = "auto"
     dtype: str = "auto"
     gradient_checkpointing: bool = True
+    gradient_accumulation_steps: int = 1
+    init_projector_from: str | None = None  # path to Stage 1 checkpoint directory
+    stage: int | None = None  # 1 (connector-only alignment) or 2 (visual instruction tuning)
     limit: int | None = None  # cap training records for smoke runs
 
     @classmethod

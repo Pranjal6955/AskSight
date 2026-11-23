@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import platform
 import random
 import subprocess
@@ -24,7 +25,7 @@ import torch
 from PIL import Image
 
 from .config import ModelConfig, TrainConfig, load_configs
-from .pipeline import AskSightModel, save_checkpoint, write_manifest
+from .pipeline import AskSightModel, load_projector, save_checkpoint, write_manifest
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -92,6 +93,13 @@ def _val_loss(model: AskSightModel, records: list[dict], data_dir: Path, batch_s
     return total / max(count, 1)
 
 
+def _cosine_with_warmup_factor(current_step: int, warmup_steps: int, total_steps: int) -> float:
+    if current_step < warmup_steps:
+        return float(current_step) / float(max(1, warmup_steps))
+    progress = float(current_step - warmup_steps) / float(max(1, total_steps - warmup_steps))
+    return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
+
+
 def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
     started_at = datetime.now(UTC).isoformat()
     data_dir = Path(train_config.data_dir)
@@ -107,36 +115,78 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
     torch.manual_seed(train_config.seed)
 
     model = AskSightModel(model_config, device=train_config.device, dtype=train_config.dtype)
+
+    # Optional: load pretrained connector from Stage 1 before attaching LoRA or starting Stage 2
+    if train_config.init_projector_from:
+        stage1_path = Path(train_config.init_projector_from)
+        print(f"initializing connector weights from {stage1_path}")
+        load_projector(stage1_path, model)
+
     if model_config.lora_rank is not None:
         model.enable_lora()
     if train_config.gradient_checkpointing:
         model.enable_gradient_checkpointing()
     model.train_mode()  # vision stays in eval mode; connector/LoRA train
 
-    optimizer = torch.optim.AdamW(
-        model.trainable_parameters(), lr=train_config.lr, weight_decay=train_config.weight_decay
+    param_groups = model.get_parameter_groups(
+        connector_lr=train_config.lr,
+        lora_lr=train_config.lora_lr,
+        weight_decay=train_config.weight_decay,
     )
+    optimizer = torch.optim.AdamW(param_groups)
+
+    accum_steps = max(1, train_config.gradient_accumulation_steps)
+    total_batches = math.ceil(len(records) / train_config.batch_size)
+    total_optimizer_steps = math.ceil(total_batches / accum_steps) * train_config.epochs
+    warmup_steps = int(total_optimizer_steps * train_config.warmup_ratio)
+
+    scheduler = torch.optim.lr_scheduler.LambdaLR(
+        optimizer,
+        lr_lambda=lambda step: _cosine_with_warmup_factor(
+            step, warmup_steps, total_optimizer_steps
+        ),
+    )
+
     rng = random.Random(train_config.seed)
     history = []
+    best_val_loss = float("inf")
+    checkpoint_dir = Path(train_config.out_dir) / train_config.version
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    optimizer_step_count = 0
     for epoch in range(train_config.epochs):
         started = time.perf_counter()
         losses = []
+        optimizer.zero_grad(set_to_none=True)
+
         for step, batch in enumerate(_batches(records, train_config.batch_size, rng)):
             loaded = _load_batch(batch, data_dir)
             if loaded is None:
                 continue
             images, questions, answers = loaded
             loss = model(images, questions, answers)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.trainable_parameters(), 1.0)
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+            scaled_loss = loss / accum_steps
+            scaled_loss.backward()
             losses.append(loss.item())
-            if step % 10 == 0:
-                print(f"epoch {epoch} step {step}: loss {loss.item():.4f}")
+
+            if (step + 1) % accum_steps == 0 or (step + 1) == total_batches:
+                torch.nn.utils.clip_grad_norm_(model.trainable_parameters(), 1.0)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad(set_to_none=True)
+                optimizer_step_count += 1
+
+            if step % (10 * accum_steps) == 0:
+                lrs = [
+                    f"{g.get('name', i)}:{g['lr']:.2e}"
+                    for i, g in enumerate(optimizer.param_groups)
+                ]
+                print(f"epoch {epoch} step {step}: loss {loss.item():.4f} (lrs: {', '.join(lrs)})")
+
         model.eval()  # disable LoRA dropout for validation
         val_loss = _val_loss(model, val_records, data_dir, train_config.batch_size)
         model.train_mode()
+
         epoch_metrics = {
             "epoch": epoch,
             "train_loss": sum(losses) / max(len(losses), 1),
@@ -146,9 +196,18 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
         history.append(epoch_metrics)
         print(json.dumps(epoch_metrics))
 
-    model_config.version = train_config.version
-    checkpoint_dir = Path(train_config.out_dir) / train_config.version
-    save_checkpoint(checkpoint_dir, model)
+        # Validation-based checkpoint saving
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            model_config.version = train_config.version
+            save_checkpoint(checkpoint_dir, model)
+            print(f"epoch {epoch}: new best val_loss {val_loss:.4f} saved to {checkpoint_dir}")
+
+    # Ensure at least one checkpoint is saved
+    if not (checkpoint_dir / "projector.safetensors").exists():
+        model_config.version = train_config.version
+        save_checkpoint(checkpoint_dir, model)
+
     data_meta_path = data_dir / "meta.json"
     data_meta = None
     if data_meta_path.exists():
@@ -171,6 +230,7 @@ def train(model_config: ModelConfig, train_config: TrainConfig) -> dict:
         "dependencies": _dependency_versions(),
         "data_meta": data_meta,
         "epochs": history,
+        "best_val_loss": best_val_loss,
         "trainable_parameters": sum(p.numel() for p in model.trainable_parameters()),
         "lora_enabled": model.lora_enabled,
         "model_config": model_config.to_dict(),
@@ -196,6 +256,31 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="enable LoRA on the LM with this rank (overrides config)",
     )
+    parser.add_argument(
+        "--lora-lr",
+        type=float,
+        default=None,
+        help="learning rate for LoRA parameters (defaults to lr / 10)",
+    )
+    parser.add_argument(
+        "--init-projector-from",
+        type=Path,
+        default=None,
+        help="path to Stage 1 checkpoint directory to initialize connector weights",
+    )
+    parser.add_argument(
+        "--grad-accum",
+        type=int,
+        default=None,
+        help="gradient accumulation steps",
+    )
+    parser.add_argument(
+        "--stage",
+        type=int,
+        default=None,
+        choices=[1, 2],
+        help="training stage: 1 (connector-only alignment) or 2 (visual instruction tuning)",
+    )
     args = parser.parse_args(argv)
 
     model_config, train_config = load_configs(args.config)
@@ -209,6 +294,16 @@ def main(argv: list[str] | None = None) -> int:
         train_config.version = args.version
     if args.lora_rank is not None:
         model_config.lora_rank = args.lora_rank
+    if args.lora_lr is not None:
+        train_config.lora_lr = args.lora_lr
+    if args.init_projector_from is not None:
+        train_config.init_projector_from = str(args.init_projector_from)
+    if args.grad_accum is not None:
+        train_config.gradient_accumulation_steps = args.grad_accum
+    if args.stage is not None:
+        train_config.stage = args.stage
+        if args.stage == 1:
+            model_config.lora_rank = None
     train(model_config, train_config)
     return 0
 

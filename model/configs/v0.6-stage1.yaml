@@ -1,0 +1,32 @@
+# AskSight v0.6 Stage 1 Configuration: Connector Alignment Only
+# Vision and LM backbones are frozen. Only the 2-layer MLP connector is trained.
+
+model:
+  version: v0.6-stage1-connector-align
+  vision_model: openai/clip-vit-large-patch14
+  vision_revision: e073d58e5fea2f33477c3561de63fc5da34697ef
+  lm_model: Qwen/Qwen2.5-1.5B-Instruct
+  lm_revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+  connector_hidden: null        # default: LM hidden size (1536)
+  system_prompt: >-
+    You are AskSight, an assistant that answers questions about images for
+    blind and low-vision users. Answer in clear, natural English.
+  max_new_tokens: 128
+  lora_rank: null               # LoRA disabled in Stage 1
+
+train:
+  data_dir: data/vqa
+  out_dir: checkpoints
+  version: v0.6-stage1-connector-align
+  stage: 1
+  epochs: 2
+  batch_size: 4
+  lr: 0.001                       # higher learning rate for fresh connector alignment
+  warmup_ratio: 0.05
+  weight_decay: 0.0
+  gradient_accumulation_steps: 4  # effective batch size = 16
+  gradient_checkpointing: true
+  seed: 0
+  device: auto
+  dtype: float16
+  limit: null

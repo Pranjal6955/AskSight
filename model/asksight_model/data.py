@@ -209,7 +209,7 @@ def prepare(
     n_test: int = 250,
     seed: int = 0,
     jobs: int = 8,
-    answer_style: str = SENTENCE_STYLE,
+    answer_style: str = SHORT_STYLE,
 ) -> dict:
     if answer_style not in (SENTENCE_STYLE, SHORT_STYLE):
         raise ValueError(f"unknown answer_style {answer_style!r}")
@@ -270,8 +270,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--answer-style",
         choices=(SENTENCE_STYLE, SHORT_STYLE),
-        default=SENTENCE_STYLE,
-        help="training targets: complete sentences or the original short VQA answer",
+        default=SHORT_STYLE,
+        help="training targets: short VQA answer (default) or converted complete sentences",
     )
     args = parser.parse_args(argv)
     prepare(

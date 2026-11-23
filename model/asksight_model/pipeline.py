@@ -156,6 +156,31 @@ class AskSightModel(nn.Module):
         params.extend(p for p in self.lm.parameters() if p.requires_grad)
         return params
 
+    def get_parameter_groups(
+        self, connector_lr: float, lora_lr: float | None = None, weight_decay: float = 0.0
+    ) -> list[dict]:
+        """Separate parameter groups with dedicated learning rates for connector vs LoRA."""
+        groups = [
+            {
+                "params": [p for p in self.connector.parameters() if p.requires_grad],
+                "lr": connector_lr,
+                "weight_decay": weight_decay,
+                "name": "connector",
+            }
+        ]
+        if self.lora_enabled:
+            lm_trainable = [p for p in self.lm.parameters() if p.requires_grad]
+            if lm_trainable:
+                groups.append(
+                    {
+                        "params": lm_trainable,
+                        "lr": lora_lr if lora_lr is not None else connector_lr * 0.1,
+                        "weight_decay": weight_decay,
+                        "name": "lora",
+                    }
+                )
+        return groups
+
     def train_mode(self) -> None:
         self.vision.eval()
         self.connector.train()
@@ -417,7 +442,7 @@ def save_checkpoint(path: Path, model: AskSightModel) -> None:
 
 def load_projector(path: Path, model: AskSightModel) -> AskSightModel:
     path = Path(path)
-    if model.config.lora_rank is not None:
+    if model.config.lora_rank is not None and (path / ADAPTER_CONFIG_FILE).is_file():
         model.enable_lora(adapter_dir=path)
     try:
         state = load_file(str(path / PROJECTOR_FILE))

@@ -1,0 +1,50 @@
+# AskSight v0.6 Configuration (Track B)
+# Corrected Two-Stage ViT-Large/14 + Qwen2.5-1.5B-Instruct + LoRA recipe.
+#
+# Stage 1: Freeze vision & LM; train connector only on image-caption alignment.
+# Stage 2: Initialize connector from Stage 1; enable LoRA (r=16); visual instruction tuning.
+
+model:
+  version: v0.6-b-lora16-clip-vit-large-patch14
+  vision_model: openai/clip-vit-large-patch14
+  vision_revision: e073d58e5fea2f33477c3561de63fc5da34697ef
+  lm_model: Qwen/Qwen2.5-1.5B-Instruct
+  lm_revision: 989aa7980e4cf806f80c7fef2b1adb7bc71aa306
+  connector_hidden: null        # default: LM hidden size (1536)
+  system_prompt: >-
+    You are AskSight, an assistant that answers questions about images for
+    blind and low-vision users. Answer in clear, natural English. For a direct
+    question, give a concise, accurate answer (e.g. 'drywall', 'left', 'yes', 'tennis').
+    For a photo description, give three to five short sentences covering the main
+    subject and important nearby details. Mention only details supported by
+    the image. Include important visible text when readable, and say when something
+    is unclear instead of guessing.
+  max_new_tokens: 128
+  lora_rank: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj
+    - up_proj
+    - down_proj
+
+train:
+  data_dir: data/vqa
+  out_dir: checkpoints
+  version: v0.6-b-lora16-clip-vit-large-patch14
+  epochs: 3
+  batch_size: 2
+  lr: 0.0005                      # connector learning rate
+  lora_lr: 0.00005                # 10x smaller learning rate for LoRA
+  warmup_ratio: 0.05
+  weight_decay: 0.01
+  gradient_accumulation_steps: 8  # effective batch size = 16
+  gradient_checkpointing: true
+  seed: 0
+  device: auto
+  dtype: float16
+  limit: null

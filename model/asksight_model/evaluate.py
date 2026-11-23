@@ -358,6 +358,113 @@ def fact_metrics(rows: list[tuple[str, list[str] | None]]) -> dict:
     }
 
 
+def detailed_vqa_metrics(records: list[dict], predictions: list[str]) -> dict:
+    """Compute detailed evaluation metrics including exact match, yes/no balance,
+
+    per-category breakdown, confusion matrix, and generic fallback frequency.
+    """
+    total = len(predictions)
+    if total == 0:
+        return {}
+
+    exact_matches = 0
+    yn_records = []
+    yn_preds = []
+    generic_patterns = [
+        "the image shows a",
+        "the image shows",
+        "this is a",
+        "no, that is not correct",
+        "yes, that is correct",
+    ]
+    generic_count = 0
+
+    # Categorization by question prefix
+    categories = {
+        "yes_no": {"correct": 0, "total": 0},
+        "color": {"correct": 0, "total": 0},
+        "number": {"correct": 0, "total": 0},
+        "what": {"correct": 0, "total": 0},
+        "where": {"correct": 0, "total": 0},
+        "other": {"correct": 0, "total": 0},
+    }
+
+    # Confusion matrix for yes/no
+    # tp: pred=yes, ref=yes | fp: pred=yes, ref=no
+    # tn: pred=no, ref=no   | fn: pred=no, ref=yes
+    cm = {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+
+    for record, pred in zip(records, predictions, strict=True):
+        norm_pred = normalize_answer(pred)
+        norm_refs = [normalize_answer(a) for a in record["answers"]]
+        short_ref = normalize_answer(record.get("short_answer") or record["answers"][0])
+        q_lower = record["question"].lower()
+
+        # Exact match (against official VQA formula or direct short answer)
+        is_exact = any(norm_pred == r for r in norm_refs)
+        if is_exact:
+            exact_matches += 1
+
+        # Check generic response patterns
+        if any(norm_pred.startswith(p) or p in norm_pred for p in generic_patterns):
+            generic_count += 1
+
+        # Determine question category
+        if short_ref in ("yes", "no") or q_lower.startswith(
+            ("is ", "are ", "was ", "were ", "do ", "does ", "did ", "can ", "could ", "would ")
+        ):
+            cat = "yes_no"
+            yn_records.append(short_ref)
+            yn_preds.append(norm_pred)
+
+            pred_is_yes = "yes" in norm_pred.split()
+            pred_is_no = "no" in norm_pred.split()
+
+            if short_ref == "yes":
+                if pred_is_yes:
+                    cm["tp"] += 1
+                elif pred_is_no:
+                    cm["fn"] += 1
+            elif short_ref == "no":
+                if pred_is_no:
+                    cm["tn"] += 1
+                elif pred_is_yes:
+                    cm["fp"] += 1
+        elif "color" in q_lower:
+            cat = "color"
+        elif q_lower.startswith("how many") or any(c.isdigit() for c in short_ref):
+            cat = "number"
+        elif q_lower.startswith("what"):
+            cat = "what"
+        elif q_lower.startswith("where"):
+            cat = "where"
+        else:
+            cat = "other"
+
+        categories[cat]["total"] += 1
+        if is_exact:
+            categories[cat]["correct"] += 1
+
+    per_category_accuracy = {}
+    for cat_name, stats in categories.items():
+        if stats["total"] > 0:
+            per_category_accuracy[cat_name] = {
+                "total": stats["total"],
+                "accuracy": round(stats["correct"] / stats["total"], 4),
+            }
+
+    yes_no_total = len(yn_records)
+    yes_no_acc = round((cm["tp"] + cm["tn"]) / yes_no_total, 4) if yes_no_total > 0 else None
+
+    return {
+        "normalized_exact_match": round(exact_matches / total, 4),
+        "yes_no_accuracy": yes_no_acc,
+        "yes_no_confusion_matrix": cm,
+        "generic_answer_frequency": round(generic_count / total, 4),
+        "per_category_breakdown": per_category_accuracy,
+    }
+
+
 def evaluate(
     checkpoint_dir: Path,
     data_dir: Path,
@@ -419,6 +526,9 @@ def evaluate(
             ),
             4,
         )
+
+    detailed = detailed_vqa_metrics(records, predictions)
+    result.update(detailed)
 
     predictions_path = Path(checkpoint_dir) / f"predictions_{split}.jsonl"
     with open(predictions_path, "w") as handle:
