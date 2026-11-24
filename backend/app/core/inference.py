@@ -34,15 +34,17 @@ def get_inference_service():
         return DevMockInferenceService()
 
     try:
-        # String import so static type checkers do not require the model
-        # package (torch) inside the backend venv; fail loudly if used anyway.
-        asksight_model = importlib.import_module("asksight_model")
+        import sys
+        from pathlib import Path
+        model_dir = str(Path(__file__).resolve().parents[3] / "model")
+        if model_dir not in sys.path:
+            sys.path.insert(0, model_dir)
+
+        import asksight_model
+        return asksight_model.LocalInferenceService()
     except ImportError as exc:
         raise RuntimeError(
-            f"{MODEL_CHECKPOINT_ENV} is set to '{checkpoint_dir}' but the asksight_model"
-            " package is not installed in this venv. Run"
-            " `pip install -e ../model` (installs torch) or unset"
+            f"{MODEL_CHECKPOINT_ENV} is set to '{checkpoint_dir}' but asksight_model"
+            " could not be loaded. Run `pip install -e ../model` or unset"
             f" {MODEL_CHECKPOINT_ENV} to keep the mock."
         ) from exc
-
-    return asksight_model.LocalInferenceService(checkpoint_dir)

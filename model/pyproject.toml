@@ -1,20 +1,21 @@
 [project]
 name = "asksight-model"
-version = "0.1.0"
-description = "AskSight LLaVA-style multimodal Q&A: frozen CLIP encoder + trainable projection connector + frozen Qwen2.5 LM"
+version = "0.2.0"
+description = "AskSight unified assistive Vision-Language Model based on Qwen3-VL-4B-Instruct"
 requires-python = ">=3.11"
 dependencies = [
   "torch>=2.4",
-  "transformers>=4.45",
+  "transformers>=5.0",
   "pillow>=10.0",
   "pyyaml>=6.0",
   "safetensors>=0.4",
+  "peft>=0.13",
+  "bitsandbytes>=0.43.0",
+  "opencv-python-headless>=4.8.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "ruff>=0.6", "peft>=0.13"]
-lora = ["peft>=0.13"]
-vlm_eval = ["transformers>=5.0", "accelerate>=1.0"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
 
 [build-system]
 requires = ["hatchling"]
