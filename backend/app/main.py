@@ -1,5 +1,6 @@
 """FastAPI application factory for the AskSight backend."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,12 +12,13 @@ load_dotenv()
 from fastapi import FastAPI  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
-from app.api import admin, ask, auth, health, history, images, speech  # noqa: E402
+from app.api import admin, ask, auth, health, history, images, metrics, speech  # noqa: E402
 from app.core.inference import get_inference_service  # noqa: E402
 from app.core.middleware import RequestContextMiddleware, setup_logging  # noqa: E402
 from app.db import db  # noqa: E402
 
 logger = logging.getLogger("asksight.startup")
+DASHBOARD_DIR = Path(__file__).resolve().parents[2] / "admin-dashboard"
 
 
 @asynccontextmanager
@@ -24,7 +26,8 @@ async def lifespan(_: FastAPI):
     await db.connect()
     try:
         # Load once at startup so the first /ask does not pay the cold start.
-        get_inference_service()
+        # Off the event loop: a multi-GB model load must not block live requests.
+        await asyncio.to_thread(get_inference_service)
     except Exception:
         # Auth, images and history stay up; /ask returns 503 and readiness
         # reports the model as unavailable until the checkpoint is fixed.
@@ -50,6 +53,7 @@ def create_app() -> FastAPI:
     application.add_middleware(RequestContextMiddleware)
 
     application.include_router(health.router)
+    application.include_router(metrics.router)
     application.include_router(auth.router)
     application.include_router(admin.router)
     application.include_router(images.router)
@@ -57,8 +61,8 @@ def create_app() -> FastAPI:
     application.include_router(history.router)
     application.include_router(speech.router)
 
-    dashboard_dir = Path(__file__).resolve().parents[2] / "admin-dashboard"
-    application.mount("/dashboard", StaticFiles(directory=dashboard_dir, html=True))
+    if DASHBOARD_DIR.is_dir():
+        application.mount("/dashboard", StaticFiles(directory=DASHBOARD_DIR, html=True))
     return application
 
 

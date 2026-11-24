@@ -1,6 +1,5 @@
-"""Admin usage endpoint: auth gates and empty response shape."""
+"""Admin usage endpoint: JWT role gate and empty response shape."""
 
-import os
 import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -46,32 +45,24 @@ class AdminApiTestCase(unittest.TestCase):
         self.addCleanup(self.client.close)
         self.db = _EmptyDB()
 
-    def overview(self, headers=None, **env):
-        credentials = {"ADMIN_TOKEN": "", "ADMIN_EMAILS": "", **env}
+    def overview(self, headers=None):
         with (
-            patch.dict(os.environ, credentials),
             patch("app.api.admin.db", self.db),
             patch("app.core.dependencies.db", self.db),
         ):
             return self.client.get("/admin/overview", headers=headers or {})
 
-    def add_user(self, email, user_id="u1"):
-        self.db.user.users[user_id] = SimpleNamespace(id=user_id, email=email)
+    def add_user(self, email, role="USER", user_id="u1"):
+        self.db.user.users[user_id] = SimpleNamespace(id=user_id, email=email, role=role)
         return user_id
 
-    def test_disabled_when_no_credentials_are_configured(self):
-        res = self.overview(headers={"X-Admin-Token": "x"})
-        self.assertEqual(res.status_code, 503)
+    def test_no_token_is_rejected(self):
+        self.assertEqual(self.overview().status_code, 401)
 
-    def test_rejects_missing_or_wrong_key(self):
-        self.assertEqual(self.overview(ADMIN_TOKEN="secret").status_code, 401)
-        self.assertEqual(
-            self.overview(headers={"X-Admin-Token": "wrong"}, ADMIN_TOKEN="secret").status_code,
-            401,
-        )
-
-    def test_valid_key_returns_the_empty_overview(self):
-        res = self.overview(headers={"X-Admin-Token": "secret"}, ADMIN_TOKEN="secret")
+    def test_admin_role_bearer_is_accepted(self):
+        user_id = self.add_user(ADMIN_EMAIL, role="ADMIN")
+        token = create_access_token(user_id)
+        res = self.overview(headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(res.status_code, 200)
         self.assertEqual(
             res.json(),
@@ -88,33 +79,25 @@ class AdminApiTestCase(unittest.TestCase):
             },
         )
 
-    def test_admin_account_bearer_is_accepted(self):
-        user_id = self.add_user(ADMIN_EMAIL)
-        token = create_access_token(user_id)
-        res = self.overview(
-            headers={"Authorization": f"Bearer {token}"},
-            ADMIN_EMAILS=ADMIN_EMAIL,
-        )
-        self.assertEqual(res.status_code, 200)
-
-    def test_other_accounts_are_rejected(self):
+    def test_regular_account_is_rejected(self):
         user_id = self.add_user("someone@example.com")
         token = create_access_token(user_id)
-        res = self.overview(
-            headers={"Authorization": f"Bearer {token}"},
-            ADMIN_EMAILS=ADMIN_EMAIL,
-        )
+        res = self.overview(headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 401)
+
+    def test_token_signed_with_another_secret_is_rejected(self):
+        user_id = self.add_user(ADMIN_EMAIL, role="ADMIN")
+        token = create_access_token(user_id)
+        with patch("app.core.dependencies.SECRET_KEY", "a-different-signing-secret"):
+            res = self.overview(headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(res.status_code, 401)
 
     def test_unknown_user_and_refresh_token_are_rejected(self):
-        self.add_user(ADMIN_EMAIL)
+        self.add_user(ADMIN_EMAIL, role="ADMIN")
         for token in (
             create_access_token("missing"),
             create_refresh_token("u1", "session1"),
         ):
             with self.subTest(token=token[:12]):
-                res = self.overview(
-                    headers={"Authorization": f"Bearer {token}"},
-                    ADMIN_EMAILS=ADMIN_EMAIL,
-                )
+                res = self.overview(headers={"Authorization": f"Bearer {token}"})
                 self.assertEqual(res.status_code, 401)

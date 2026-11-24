@@ -148,14 +148,19 @@ class TestDeleteHistory(HistoryApiTestCase):
         self.assertEqual(len(self.db.historyentry.records), 1)
         self.assertEqual(get_storage().read(image.storageKey), data)
 
-    def test_last_entry_for_an_image_also_removes_the_image_bytes(self):
-        image, _ = self.seed_image()
+    def test_deleting_the_last_entry_keeps_the_image(self):
+        image, data = self.seed_image()
         (entry,) = run(seed_history(self.db, self.user_id, image.id, 1))
         res = self.client.delete(f"/history/{entry.id}", headers=self.headers)
         self.assertEqual(res.status_code, 204)
+        self.assertEqual(len(self.db.historyentry.records), 0)
+        self.assertIn(image.id, self.db.image.records)
+        self.assertEqual(get_storage().read(image.storageKey), data)
+
+        deleted = self.client.delete(f"/images/{image.id}", headers=self.headers)
+        self.assertEqual(deleted.status_code, 204)
         self.assertNotIn(image.id, self.db.image.records)
         self.assertIsNone(get_storage().read(image.storageKey))
-        self.assertEqual(len(self.db.historyentry.records), 0)
 
     def test_foreign_entry_is_404_and_survives(self):
         other_id, _ = self.signup(FOREIGN)
@@ -164,7 +169,7 @@ class TestDeleteHistory(HistoryApiTestCase):
         self.assertEqual(res.status_code, 404)
         self.assertIn(foreign.id, self.db.historyentry.records)
 
-    def test_delete_all_wipes_only_the_callers_data_and_bytes(self):
+    def test_delete_all_wipes_only_the_callers_answers(self):
         other_id, other_headers = self.signup(FOREIGN)
         own_image, own_data = self.seed_image()
         foreign_image, foreign_data = self.seed_image(owner_id=other_id)
@@ -173,14 +178,17 @@ class TestDeleteHistory(HistoryApiTestCase):
 
         res = self.client.delete("/history", headers=self.headers)
         self.assertEqual(res.status_code, 204)
-        # Everything of the caller's is gone, rows and bytes.
-        self.assertEqual(self.db.image.records, {foreign_image.id: foreign_image})
-        self.assertIsNone(get_storage().read(own_image.storageKey))
         remaining = list(self.db.historyentry.records.values())
         self.assertEqual({entry.ownerId for entry in remaining}, {other_id})
         self.assertEqual(len(remaining), 2)
-        # The other user's bytes are untouched.
+        # Images and their bytes stay until deleted explicitly.
+        self.assertEqual(get_storage().read(own_image.storageKey), own_data)
         self.assertEqual(get_storage().read(foreign_image.storageKey), foreign_data)
+        self.assertEqual(
+            self.client.delete(f"/images/{own_image.id}", headers=self.headers).status_code, 204
+        )
+        self.assertIsNone(get_storage().read(own_image.storageKey))
+        self.assertIn(foreign_image.id, self.db.image.records)
         # And the other user still sees their history.
         foreign_page = self.client.get("/history", headers=other_headers).json()
         self.assertEqual(len(foreign_page["items"]), 2)

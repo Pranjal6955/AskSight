@@ -114,7 +114,8 @@ class LocalInferenceService:
         if queue_timeout_s is not None and queue_timeout_s < 0:
             raise ValueError("queue_timeout_s must be non-negative or None")
 
-        self.model_version = model_id
+        engine_id = str(checkpoint_dir) if checkpoint_dir else model_id
+        self.model_version = engine_id
         self._max_concurrency = max_concurrency
         self._queue_timeout_s = queue_timeout_s
         self._slots = threading.BoundedSemaphore(max_concurrency)
@@ -131,7 +132,7 @@ class LocalInferenceService:
 
         # Instantiate unified Qwen3-VL model
         self.model = Qwen3VLAssistiveModel(
-            model_id=model_id,
+            model_id=engine_id,
             load_in_4bit=load_in_4bit,
             device=device,
             model=model,

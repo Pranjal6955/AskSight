@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -22,7 +23,8 @@ logger = logging.getLogger("asksight.api")
 router = APIRouter(prefix="/ask", tags=["Ask"])
 
 # Ask holds the whole request slot — covers model load plus inference.
-ASK_TIMEOUT_SECONDS = 30.0
+# Override with ASK_TIMEOUT_SECONDS env var (e.g. 120 on CPU, 30 on GPU).
+ASK_TIMEOUT_SECONDS = float(os.getenv("ASK_TIMEOUT_SECONDS", "90"))
 MODEL_UNAVAILABLE = "The model is unavailable right now. Please try again later."
 ASK_TOO_SLOW = "The model took too long to answer. Please try again."
 NOT_SAVED = "The answer could not be saved to history."
@@ -51,7 +53,7 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
     decode_ms = round((time.perf_counter() - started) * 1000, 1)
 
     try:
-        service = get_inference_service()
+        service = await asyncio.to_thread(get_inference_service)
     except RuntimeError as exc:
         # Model backend misconfigured or unloadable — infrastructure, not input.
         # Log the technical cause; the caller gets the contract sentence.

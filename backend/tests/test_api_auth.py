@@ -1,6 +1,8 @@
 import unittest
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
+from prisma.errors import UniqueViolationError
 
 from app.api import auth as auth_module
 from app.core.security import create_refresh_token, verify_password
@@ -54,6 +56,11 @@ class TestSignup(AuthApiTestCase):
         self.signup(email="ada@example.com")
         self.assertEqual(self.signup(email="ADA@example.com").status_code, 409)
 
+    def test_unique_constraint_race_returns_409(self):
+        with patch.object(self.db.user, "create", AsyncMock(side_effect=UniqueViolationError({}))):
+            res = self.signup()
+        self.assertEqual(res.status_code, 409)
+
     def test_rejects_invalid_payload_with_422(self):
         for bad in ({"email": "nope"}, {"password": "short"}, {"name": "A"}, {"email": ""}):
             with self.subTest(bad=bad):
@@ -74,6 +81,12 @@ class TestLogin(AuthApiTestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["token_type"], "bearer")
         self.assertTrue(res.json()["access_token"])
+
+    def test_rejects_oversized_password_with_422(self):
+        res = self.client.post(
+            "/auth/login", json={"email": SIGNUP["email"], "password": "x" * 129}
+        )
+        self.assertEqual(res.status_code, 422)
 
     def test_login_is_case_insensitive_on_email(self):
         res = self.client.post(

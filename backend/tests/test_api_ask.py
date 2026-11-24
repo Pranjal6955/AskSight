@@ -3,7 +3,7 @@ import os
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from fastapi.testclient import TestClient
 from PIL import Image as PILImage
@@ -216,13 +216,13 @@ class TestAsk(AskApiTestCase):
 
 class TestGetInferenceService(unittest.TestCase):
     def setUp(self):
-        self.addCleanup(inference.get_inference_service.cache_clear)
-        inference.get_inference_service.cache_clear()
+        self.addCleanup(inference.clear_cache)
+        inference.clear_cache()
 
     def test_defaults_to_mock_without_checkpoint(self):
         with patch.dict(os.environ, {}, clear=False):
             os.environ.pop(inference.MODEL_CHECKPOINT_ENV, None)
-            inference.get_inference_service.cache_clear()
+            inference.clear_cache()
             self.assertEqual(inference.get_inference_service().model_version, "mock-0.0.0")
 
     def test_missing_model_package_raises_clear_error(self):
@@ -235,6 +235,36 @@ class TestGetInferenceService(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn(inference.MODEL_CHECKPOINT_ENV, message)
         self.assertIn("pip install -e ../model", message)
+
+    def test_checkpoint_path_is_passed_to_the_model_service(self):
+        service = SimpleNamespace(model_version="checkpoint-v1")
+        model_package = SimpleNamespace(LocalInferenceService=Mock(return_value=service))
+        with (
+            patch.dict(os.environ, {inference.MODEL_CHECKPOINT_ENV: "checkpoints/v1"}),
+            patch.object(
+                inference.importlib, "import_module", return_value=model_package
+            ) as imported,
+        ):
+            self.assertIs(inference.get_inference_service(), service)
+        imported.assert_called_once_with("asksight_model")
+        model_package.LocalInferenceService.assert_called_once_with(checkpoint_dir="checkpoints/v1")
+
+    def test_failed_load_is_cached_and_reported_without_retrying(self):
+        with (
+            patch.dict(os.environ, {inference.MODEL_CHECKPOINT_ENV: "checkpoints/v1"}),
+            patch.object(
+                inference.importlib, "import_module", side_effect=OSError("no weights")
+            ) as imported,
+        ):
+            with self.assertRaises(RuntimeError) as ctx:
+                inference.get_inference_service()
+            with self.assertRaises(RuntimeError):
+                inference.get_inference_service()
+        self.assertEqual(imported.call_count, 1)
+        self.assertIn("no weights", str(ctx.exception))
+        service, error = inference.inference_status()
+        self.assertIsNone(service)
+        self.assertIs(error, ctx.exception)
 
 
 if __name__ == "__main__":

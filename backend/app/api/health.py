@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.core.inference import get_inference_service
+from app.core.inference import inference_status
 from app.db import db
 from app.schema.health import LiveResponse, ModelStatusResponse, ReadyResponse
 
@@ -14,14 +14,18 @@ logger = logging.getLogger("asksight.api")
 router = APIRouter(prefix="/health", tags=["Health"])
 
 
+def get_inference_service():
+    """The already-loaded service, or None when its load failed at startup."""
+    service, _ = inference_status()
+    return service
+
+
 def _model_service():
     """The inference service, or None when it cannot be loaded right now."""
-    # shortcut: a failed load is retried on each probe, so a fixed checkpoint
-    # recovers without a restart but probes can be slow while it stays broken.
     try:
         return get_inference_service()
     except Exception:
-        # Logged at check time; the probe response must not leak paths/errors.
+        # Patched in tests; real load failures are cached and logged at startup.
         logger.exception("model_status_check_failed")
         return None
 

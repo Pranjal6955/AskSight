@@ -8,6 +8,7 @@ dual-mode assistive routing, and clean TTS-ready output decoding.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Optional
 
 import torch
@@ -48,11 +49,25 @@ class Qwen3VLAssistiveModel:
         self.load_in_4bit = load_in_4bit
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
+        # A QLoRA checkpoint holds adapters, not full weights. Load the pinned
+        # base model first, then attach the adapter saved next to its config.
+        checkpoint = Path(model_id)
+        adapter_dir = (
+            str(checkpoint)
+            if checkpoint.is_dir() and (checkpoint / "adapter_config.json").is_file()
+            else None
+        )
+        base_model_id = model_id
+        if adapter_dir is not None:
+            from peft import PeftConfig
+
+            base_model_id = PeftConfig.from_pretrained(adapter_dir).base_model_name_or_path
+
         if processor is not None:
             self.processor = processor
         else:
             self.processor = AutoProcessor.from_pretrained(
-                model_id,
+                adapter_dir or base_model_id,
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
             )
@@ -76,12 +91,17 @@ class Qwen3VLAssistiveModel:
                 load_kwargs["quantization_config"] = quantization_config
 
             self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-                model_id,
+                base_model_id,
                 **load_kwargs,
             )
 
             if not torch.cuda.is_available():
                 self.model.to(self.device)
+
+        if adapter_dir is not None:
+            from peft import PeftModel
+
+            self.model = PeftModel.from_pretrained(self.model, adapter_dir)
 
         self.model.eval()
 

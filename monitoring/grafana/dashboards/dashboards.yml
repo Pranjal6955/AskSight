@@ -1,0 +1,6 @@
+apiVersion: 1
+providers:
+  - name: AskSight
+    folder: AskSight
+    options:
+      path: /etc/grafana/provisioning/dashboards

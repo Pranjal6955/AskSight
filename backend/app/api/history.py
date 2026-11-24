@@ -11,7 +11,6 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.core.dependencies import get_current_user
-from app.core.storage import get_storage
 from app.db import db
 from app.schema.history import HistoryItem, HistoryPage
 
@@ -100,29 +99,12 @@ async def get_entry(entry_id: str, current_user=Depends(get_current_user)):
 
 @router.delete("/{entry_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entry(entry_id: str, current_user=Depends(get_current_user)):
+    """Delete one answer. The photo stays until DELETE /images/{id}."""
     entry = await owned_entry(entry_id, current_user.id)
-    deleted = await db.historyentry.delete_many(where={"id": entry.id, "ownerId": current_user.id})
-    if not deleted:
-        return  # a concurrent delete already cleaned up after this entry
-
-    remaining = await db.historyentry.count(where={"imageId": entry.imageId})
-    if remaining:
-        return
-
-    # The last question about this image is gone, so the photo goes too —
-    # bytes first, for the same reason as DELETE /images/{id}.
-    image = await db.image.find_unique(where={"id": entry.imageId})
-    if image:
-        get_storage().delete(image.storageKey)
-        await db.image.delete_many(where={"id": image.id, "ownerId": current_user.id})
+    await db.historyentry.delete_many(where={"id": entry.id, "ownerId": current_user.id})
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_all_history(current_user=Depends(get_current_user)):
-    """Delete everything this user has stored: rows and bytes, bytes first."""
-    images = await db.image.find_many(where={"ownerId": current_user.id})
-    storage = get_storage()
-    for image in images:
-        storage.delete(image.storageKey)
+    """Delete this user's answers. Their photos stay until deleted explicitly."""
     await db.historyentry.delete_many(where={"ownerId": current_user.id})
-    await db.image.delete_many(where={"ownerId": current_user.id})

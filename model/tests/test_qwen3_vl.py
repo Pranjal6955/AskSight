@@ -9,8 +9,11 @@ Verifies:
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import cv2
 import numpy as np
+import peft
 import pytest
 import torch
 from PIL import Image
@@ -42,7 +45,12 @@ class DummyProcessor:
         self._return_text = return_text
 
     def apply_chat_template(
-        self, messages, tokenize=True, add_generation_prompt=True, return_dict=True, return_tensors="pt"
+        self,
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_dict=True,
+        return_tensors="pt",
     ):
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
@@ -72,6 +80,7 @@ class DummyModel(torch.nn.Module):
 # ============================================================================
 # OpenCV Pre-Inference Quality Gate Tests
 # ============================================================================
+
 
 def test_opencv_gate_pitch_black_image():
     black_img = Image.new("RGB", (224, 224), color=(0, 0, 0))
@@ -106,8 +115,11 @@ def test_opencv_gate_clear_bright_image():
 # TTS Text Cleaner & Dual Mode Routing Tests
 # ============================================================================
 
+
 def test_clean_tts_text_strips_markdown():
-    markdown_raw = "### Warning:\n* Object at **12 o'clock**.\n- Watch `out` for [steps](http://steps.com)!"
+    markdown_raw = (
+        "### Warning:\n* Object at **12 o'clock**.\n- Watch `out` for [steps](http://steps.com)!"
+    )
     cleaned = clean_tts_text(markdown_raw)
     assert "*" not in cleaned
     assert "#" not in cleaned
@@ -135,6 +147,7 @@ def test_dual_mode_routing():
 # Qwen3VLAssistiveModel Predict Smoke Tests
 # ============================================================================
 
+
 def test_predict_catches_quality_gate_without_vlm():
     dummy_model = DummyModel()
     dummy_proc = DummyProcessor()
@@ -147,7 +160,9 @@ def test_predict_catches_quality_gate_without_vlm():
 
 def test_predict_describe_mode():
     dummy_model = DummyModel()
-    dummy_proc = DummyProcessor(return_text="A clean walkway ahead with an obstacle at **2 o'clock**.")
+    dummy_proc = DummyProcessor(
+        return_text="A clean walkway ahead with an obstacle at **2 o'clock**."
+    )
     assistive_model = Qwen3VLAssistiveModel(model=dummy_model, processor=dummy_proc)
 
     arr = np.random.randint(100, 255, size=(224, 224, 3), dtype=np.uint8)
@@ -174,6 +189,7 @@ def test_predict_question_mode():
 # ============================================================================
 # LocalInferenceService Lifecycle Tests
 # ============================================================================
+
 
 def test_local_inference_service_lifecycle_and_stats():
     dummy_model = DummyModel()
@@ -209,3 +225,32 @@ def test_local_inference_service_validation():
     with pytest.raises(ValueError, match="question exceeds"):
         valid_img = Image.new("RGB", (100, 100), (200, 200, 200))
         service.answer(valid_img, question="A" * 501)
+
+
+def test_checkpoint_dir_loads_the_adapter_and_sets_the_version(monkeypatch, tmp_path):
+    adapter_dir = tmp_path / "adapter"
+    adapter_dir.mkdir()
+    (adapter_dir / "adapter_config.json").write_text("{}", encoding="utf-8")
+    seen = {}
+
+    class FakePeftConfig:
+        @staticmethod
+        def from_pretrained(path):
+            seen["config_path"] = path
+            return SimpleNamespace(base_model_name_or_path="base-model")
+
+    class FakePeftModel:
+        @staticmethod
+        def from_pretrained(model, path):
+            seen["adapter_path"] = path
+            return model
+
+    monkeypatch.setattr(peft, "PeftConfig", FakePeftConfig)
+    monkeypatch.setattr(peft, "PeftModel", FakePeftModel)
+
+    service = LocalInferenceService(
+        checkpoint_dir=str(adapter_dir), model=DummyModel(), processor=DummyProcessor()
+    )
+
+    assert service.model_version == str(adapter_dir)
+    assert seen == {"config_path": str(adapter_dir), "adapter_path": str(adapter_dir)}
