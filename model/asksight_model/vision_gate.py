@@ -15,7 +15,8 @@ DARK_LUMA_THRESHOLD = 25.0
 BLUR_LAPLACIAN_VAR_THRESHOLD = 85.0
 
 DARK_IMAGE_MESSAGE = (
-    "The image is too dark to see clearly. Please turn on a light or move to a brighter area and try again."
+    "The image is too dark to see clearly. Please turn on a light "
+    "or move to a brighter area and try again."
 )
 BLURRY_IMAGE_MESSAGE = (
     "The image is too blurry to read safely. Please hold the camera steady and try again."

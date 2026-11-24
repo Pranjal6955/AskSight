@@ -14,11 +14,10 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
-from typing import Any, Optional, Protocol
+from typing import Any, Protocol
 
 from PIL import Image
 
-from .accessibility import clean_tts_text
 from .qwen3_vl_engine import Qwen3VLAssistiveModel
 from .vision_gate import check_image_quality
 
@@ -34,10 +33,10 @@ class InferenceService(Protocol):
     model_version: str
     protocol_version: str
 
-    def answer(self, image: Image.Image, question: Optional[str] = None) -> str: ...
+    def answer(self, image: Image.Image, question: str | None = None) -> str: ...
 
 
-def validate_inputs(image: Image.Image, question: Optional[str] = None) -> Image.Image:
+def validate_inputs(image: Image.Image, question: str | None = None) -> Image.Image:
     """Shared input checks; returns image converted to RGB."""
     if not isinstance(image, Image.Image):
         raise ValueError(f"image must be a PIL.Image.Image, got {type(image).__name__}")
@@ -76,7 +75,7 @@ class MockInferenceService:
     model_version = "mock-qwen3-vl-4b"
     protocol_version = PROTOCOL_VERSION
 
-    def answer(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def answer(self, image: Image.Image, question: str | None = None) -> str:
         validate_inputs(image, question)
         is_valid, quality_error = check_image_quality(image)
         if not is_valid and quality_error is not None:
@@ -85,7 +84,7 @@ class MockInferenceService:
             return "A clear walkway ahead with an obstacle at 2 o'clock."
         return f"[mock answer] {question.strip()}"
 
-    def predict(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def predict(self, image: Image.Image, question: str | None = None) -> str:
         return self.answer(image, question)
 
 
@@ -195,7 +194,7 @@ class LocalInferenceService:
             "latency_p95_s": latency_p95,
         }
 
-    def answer(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def answer(self, image: Image.Image, question: str | None = None) -> str:
         self._count_request()
         try:
             prepared = validate_inputs(image, question)
@@ -235,5 +234,5 @@ class LocalInferenceService:
             )
         return output or CLARIFY_ANSWER
 
-    def predict(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def predict(self, image: Image.Image, question: str | None = None) -> str:
         return self.answer(image, question)

@@ -9,16 +9,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import torch
 from PIL import Image
 from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
 
 from .accessibility import (
-    DESCRIBE_MODE_SYSTEM_PROMPT,
     GENERATION_KWARGS,
-    QUESTION_MODE_SYSTEM_PROMPT,
     clean_tts_text,
     route_request,
 )
@@ -105,7 +102,7 @@ class Qwen3VLAssistiveModel:
 
         self.model.eval()
 
-    def predict(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def predict(self, image: Image.Image, question: str | None = None) -> str:
         """Run assistive inference on an input image and optional user question."""
         if not isinstance(image, Image.Image):
             raise ValueError(f"image must be a PIL.Image.Image, got {type(image).__name__}")
@@ -164,6 +161,6 @@ class Qwen3VLAssistiveModel:
         # Step 5: Clean output for TTS
         return clean_tts_text(output_text)
 
-    def answer(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def answer(self, image: Image.Image, question: str | None = None) -> str:
         """Backward-compatible alias for predict."""
         return self.predict(image=image, question=question)

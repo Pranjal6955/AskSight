@@ -13,7 +13,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import torch
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
@@ -52,7 +52,7 @@ class AssistiveMultimodalDataset(Dataset):
 
     def __init__(
         self,
-        samples: List[Dict[str, Any]],
+        samples: list[dict[str, Any]],
         processor: AutoProcessor,
     ) -> None:
         self.samples = samples
@@ -61,7 +61,7 @@ class AssistiveMultimodalDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, Any]:
+    def __getitem__(self, idx: int) -> dict[str, Any]:
         item = self.samples[idx]
         image_path = item.get("image_path")
         if isinstance(image_path, str) and Path(image_path).exists():
@@ -75,9 +75,14 @@ class AssistiveMultimodalDataset(Dataset):
         answer = item.get("answer", "")
         is_unanswerable = item.get("unanswerable", False)
         if is_unanswerable and not answer:
-            answer = "The image is unclear or cut off. Please adjust the camera angle and try again."
+            answer = (
+                "The image is unclear or cut off. Please adjust the camera angle and try again."
+            )
 
-        is_describe = not question or question.strip().lower() in ["describe", "describe this photo."]
+        is_describe = not question or question.strip().lower() in [
+            "describe",
+            "describe this photo.",
+        ]
         system_prompt = DESCRIBE_MODE_SYSTEM_PROMPT if is_describe else QUESTION_MODE_SYSTEM_PROMPT
         user_query = "Describe this photo." if is_describe else question.strip()
 
@@ -198,14 +203,14 @@ def train_qlora(
         if not p.exists():
             return
         if p.suffix == ".jsonl":
-            with open(p, "r", encoding="utf-8") as f:
+            with open(p, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         item = json.loads(line)
                         item["source"] = tag
                         samples.append(item)
         elif p.suffix == ".json":
-            with open(p, "r", encoding="utf-8") as f:
+            with open(p, encoding="utf-8") as f:
                 content = json.load(f)
                 if isinstance(content, list):
                     for item in content:

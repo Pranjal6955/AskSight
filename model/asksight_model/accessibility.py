@@ -14,10 +14,13 @@ from typing import Final
 DESCRIBE_MODE_SYSTEM_PROMPT: Final[str] = (
     "You are a visual assistant for a person with low vision. "
     "Describe this image in 2 to 4 short, clear spoken sentences. "
-    "Prioritize in this exact order: (1) Immediate physical hazards or obstacles in the walking path, "
-    "(2) Main objects or people and their positions using clock-face directions like 'at 2 o'clock', "
+    "Prioritize in this exact order: (1) Immediate physical hazards or obstacles "
+    "in the walking path, "
+    "(2) Main objects or people and their positions using clock-face directions "
+    "like 'at 2 o'clock', "
     "(3) Important readable signs or labels. "
-    "Output plain spoken text only with no bullet points, Markdown formatting, or filler phrases like 'The image shows'. "
+    "Output plain spoken text only with no bullet points, Markdown formatting, "
+    "or filler phrases like 'The image shows'. "
     "Keep your response under 60 words."
 )
 
@@ -28,7 +31,8 @@ QUESTION_MODE_SYSTEM_PROMPT: Final[str] = (
     "Read any requested numbers, dosages, expiry dates, or labels word-for-word. "
     "If the requested text or object is blurry, obscured, or cut off at the edge of the frame, "
     "do not guess—tell the user clearly how to adjust the camera. "
-    "Output plain spoken text only and keep your answer under 40 words unless reading a longer document."
+    "Output plain spoken text only and keep your answer under 40 words "
+    "unless reading a longer document."
 )
 
 # Generation hyperparameters for deterministic, low-hallucination responses

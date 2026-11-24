@@ -26,10 +26,7 @@ from asksight_model.accessibility import (
 )
 from asksight_model.qwen3_vl_engine import Qwen3VLAssistiveModel
 from asksight_model.service import (
-    CLARIFY_ANSWER,
     LocalInferenceService,
-    MockInferenceService,
-    validate_inputs,
 )
 from asksight_model.vision_gate import (
     BLURRY_IMAGE_MESSAGE,
