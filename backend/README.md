@@ -29,7 +29,6 @@ Edit `.env` and set at least:
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE?sslmode=require"
 JWT="a-long-random-secret-at-least-32-characters"
-ADMIN_EMAILS="pranjal@admin.com"
 ```
 
 Generate a suitable JWT secret with:
@@ -67,6 +66,10 @@ With the virtual environment activated:
 python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+Behind Nginx or another reverse proxy, add `--proxy-headers
+--forwarded-allow-ips=<proxy ip>` so the per-IP limits use the real client
+address instead of the proxy's.
+
 The API is available at <http://localhost:8000>.
 
 - Swagger UI: <http://localhost:8000/docs>
@@ -74,22 +77,23 @@ The API is available at <http://localhost:8000>.
 - Liveness: <http://localhost:8000/health/live>
 - Readiness: <http://localhost:8000/health/ready>
 - Model status: <http://localhost:8000/health/model>
+- Prometheus metrics: <http://localhost:8000/metrics> (keep this internal)
 
 The test console needs a build first: `cd admin-dashboard && npm install && npm run build`.
 For local frontend work, `npm run dev` serves it on <http://localhost:5173> and
 proxies `/auth`, `/images`, `/ask`, `/health` and `/admin` to the API.
 
-The dashboard's Usage tab signs in with an admin account. Create or reset the
-default one (local development only) with:
+The dashboard's Usage tab signs in with an admin account. Create or reset one
+with an explicit password:
 
 ```bash
-python -m scripts.seed_admin
+python -m scripts.seed_admin you@example.com '<strong-password>'
 ```
 
-That creates `pranjal@admin.com` / `admin12345`; pass an email and password to
-override them, and change the password before exposing the API. The account's
-email must be listed in `ADMIN_EMAILS`. A shared `X-Admin-Token` (`ADMIN_TOKEN`)
-also works for scripts and curl.
+No default password ships with the script. It creates the account with the
+`ADMIN` database role, which is what gates `/admin/*`. Sign in through
+`/auth/login` to get the JWT bearer token; the same JWT secret from `.env`
+signs every user's tokens. Scripts can do the same with curl.
 
 `/health/ready` requires both the database and inference service to be
 available.
@@ -110,8 +114,11 @@ pip install -e .
 Then set the checkpoint path in `backend/.env`, for example:
 
 ```env
-ASKSIGHT_MODEL_CHECKPOINT=../model/checkpoints/v0.1-colab
+ASKSIGHT_MODEL_CHECKPOINT=../model/checkpoints/qwen3_vl_qlora
 ```
+
+The directory can hold a full Hugging Face model or a QLoRA adapter plus its
+`adapter_config.json`; the base model is read from that config.
 
 Restart the backend after changing environment variables.
 

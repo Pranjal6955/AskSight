@@ -8,16 +8,14 @@ dual-mode assistive routing, and clean TTS-ready output decoding.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from pathlib import Path
 
 import torch
 from PIL import Image
 from transformers import AutoProcessor, BitsAndBytesConfig, Qwen3VLForConditionalGeneration
 
 from .accessibility import (
-    DESCRIBE_MODE_SYSTEM_PROMPT,
     GENERATION_KWARGS,
-    QUESTION_MODE_SYSTEM_PROMPT,
     clean_tts_text,
     route_request,
 )
@@ -48,11 +46,25 @@ class Qwen3VLAssistiveModel:
         self.load_in_4bit = load_in_4bit
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
+        # A QLoRA checkpoint holds adapters, not full weights. Load the pinned
+        # base model first, then attach the adapter saved next to its config.
+        checkpoint = Path(model_id)
+        adapter_dir = (
+            str(checkpoint)
+            if checkpoint.is_dir() and (checkpoint / "adapter_config.json").is_file()
+            else None
+        )
+        base_model_id = model_id
+        if adapter_dir is not None:
+            from peft import PeftConfig
+
+            base_model_id = PeftConfig.from_pretrained(adapter_dir).base_model_name_or_path
+
         if processor is not None:
             self.processor = processor
         else:
             self.processor = AutoProcessor.from_pretrained(
-                model_id,
+                adapter_dir or base_model_id,
                 min_pixels=min_pixels,
                 max_pixels=max_pixels,
             )
@@ -76,16 +88,21 @@ class Qwen3VLAssistiveModel:
                 load_kwargs["quantization_config"] = quantization_config
 
             self.model = Qwen3VLForConditionalGeneration.from_pretrained(
-                model_id,
+                base_model_id,
                 **load_kwargs,
             )
 
             if not torch.cuda.is_available():
                 self.model.to(self.device)
 
+        if adapter_dir is not None:
+            from peft import PeftModel
+
+            self.model = PeftModel.from_pretrained(self.model, adapter_dir)
+
         self.model.eval()
 
-    def predict(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def predict(self, image: Image.Image, question: str | None = None) -> str:
         """Run assistive inference on an input image and optional user question."""
         if not isinstance(image, Image.Image):
             raise ValueError(f"image must be a PIL.Image.Image, got {type(image).__name__}")
@@ -144,6 +161,6 @@ class Qwen3VLAssistiveModel:
         # Step 5: Clean output for TTS
         return clean_tts_text(output_text)
 
-    def answer(self, image: Image.Image, question: Optional[str] = None) -> str:
+    def answer(self, image: Image.Image, question: str | None = None) -> str:
         """Backward-compatible alias for predict."""
         return self.predict(image=image, question=question)

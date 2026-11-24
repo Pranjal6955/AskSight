@@ -1,14 +1,7 @@
 // @ts-nocheck
 import * as React from "https://esm.sh/react@19.3.0";
+import { AdminSession, refreshSession } from "./Login.js";
 import { errorMessage, request } from "./api.js";
-
-const SESSION_KEY = "asksight.dashboard.adminSession";
-
-type AdminSession = {
-  email: string;
-  accessToken: string;
-  refreshToken: string;
-};
 
 type UsageUser = {
   id: string;
@@ -132,58 +125,6 @@ function StatIcon({ name }: { name: string }) {
   );
 }
 
-function storedSession(): AdminSession | null {
-  try {
-    const raw = window.localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.email && parsed?.accessToken && parsed?.refreshToken
-      ? parsed
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistSession(next: AdminSession): AdminSession {
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-  return next;
-}
-
-function statusError(result: { status: number; error: string }) {
-  const error: any = new Error(result.error);
-  error.status = result.status;
-  return error;
-}
-
-async function signIn(email: string, password: string): Promise<AdminSession> {
-  const result = await request("/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!result.ok) throw statusError(result);
-  return {
-    email,
-    accessToken: result.body.access_token,
-    refreshToken: result.body.refresh_token,
-  };
-}
-
-async function refresh(current: AdminSession): Promise<AdminSession> {
-  const result = await request("/auth/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: current.refreshToken }),
-  });
-  if (!result.ok) throw statusError(result);
-  return persistSession({
-    ...current,
-    accessToken: result.body.access_token,
-    refreshToken: result.body.refresh_token,
-  });
-}
-
 async function fetchOverview(
   active: AdminSession,
 ): Promise<{ data: Overview; session: AdminSession }> {
@@ -191,120 +132,54 @@ async function fetchOverview(
   let current = active;
   let result = await request(path, {}, current.accessToken);
   if (result.status === 401) {
-    current = await refresh(active);
+    current = await refreshSession(active);
     result = await request(path, {}, current.accessToken);
   }
-  if (!result.ok) throw statusError(result);
+  if (!result.ok) {
+    const error: any = new Error(result.error);
+    error.status = result.status;
+    throw error;
+  }
   return { data: result.body, session: current };
 }
 
-export default function Admin() {
-  const [session, setSession] = React.useState<AdminSession | null>(storedSession);
-  const [email, setEmail] = React.useState("");
-  const [password, setPassword] = React.useState("");
+type AdminProps = {
+  session: AdminSession;
+  onSession: (session: AdminSession) => void;
+  onUnauthorized: () => void;
+};
+
+export default function Admin({ session, onSession, onUnauthorized }: AdminProps) {
   const [data, setData] = React.useState<Overview | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState("");
 
-  const load = React.useCallback(async (active: AdminSession) => {
-    setLoading(true);
-    setError("");
-    try {
-      const next = await fetchOverview(active);
-      setSession(next.session);
-      setData(next.data);
-    } catch (cause) {
-      if ((cause as any).status === 401) {
-        window.localStorage.removeItem(SESSION_KEY);
-        setSession(null);
-        setData(null);
-        setError("Session expired. Sign in again.");
-      } else {
-        setError(errorMessage(cause));
+  const load = React.useCallback(
+    async (active: AdminSession) => {
+      setLoading(true);
+      setError("");
+      try {
+        const next = await fetchOverview(active);
+        onSession(next.session);
+        setData(next.data);
+      } catch (cause) {
+        if ((cause as any).status === 401) {
+          onUnauthorized();
+        } else {
+          setError(errorMessage(cause));
+        }
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [onSession, onUnauthorized],
+  );
 
   React.useEffect(() => {
-    // Reload with the session from the last visit; the form signs in for new ones.
-    if (session) load(session);
+    load(session);
+    // Load once per login; a refresh from this view updates the parent session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    const address = email.trim();
-    if (!address || !password) {
-      setError("Enter your email and password.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      const next = persistSession(await signIn(address, password));
-      setSession(next);
-      setPassword("");
-      await load(next);
-    } catch (cause) {
-      setError(errorMessage(cause));
-      setLoading(false);
-    }
-  }
-
-  function signOut() {
-    window.localStorage.removeItem(SESSION_KEY);
-    setSession(null);
-    setData(null);
-    setError("");
-    setPassword("");
-  }
-
-  if (!session) {
-    return (
-      <form className="a11s-card a11s-admin-gate" onSubmit={submit}>
-        <h2>Admin sign in</h2>
-        <p className="a11s-muted">
-          This view shows every user's activity, so it needs the admin account.
-        </p>
-        {error ? (
-          <p className="a11s-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <label htmlFor="admin-email" className="a11s-label">
-          Email
-        </label>
-        <input
-          id="admin-email"
-          type="email"
-          className="a11s-input a11s-input-single"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          autoComplete="username"
-        />
-        <label htmlFor="admin-password" className="a11s-label">
-          Password
-        </label>
-        <input
-          id="admin-password"
-          type="password"
-          className="a11s-input a11s-input-single"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          autoComplete="current-password"
-        />
-        <button
-          className="a11s-button"
-          type="submit"
-          disabled={loading || !email.trim() || !password}
-        >
-          {loading ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-    );
-  }
 
   return (
     <section>
@@ -320,9 +195,6 @@ export default function Admin() {
             disabled={loading}
           >
             {loading ? "Refreshing…" : "Refresh"}
-          </button>
-          <button className="a11s-button a11s-button-ghost" onClick={signOut}>
-            Sign out
           </button>
         </div>
       </div>

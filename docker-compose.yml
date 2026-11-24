@@ -1,0 +1,26 @@
+# Monitoring only. Run the backend on the host first:
+#   cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+# Then: docker compose up -d   (Prometheus :9090, Grafana :3000 / admin/admin)
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  grafana:
+    image: grafana/grafana:latest
+    # Local demo: let the admin dashboard embed charts and view them without a
+    # second login. Lock this down before exposing Grafana publicly.
+    environment:
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro

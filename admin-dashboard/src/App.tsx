@@ -1,14 +1,14 @@
 // @ts-nocheck
 import * as React from "https://esm.sh/react@19.3.0";
 import Admin from "./Admin.js";
+import Login, {
+  AdminSession,
+  clearSession,
+  readSession,
+  refreshSession,
+} from "./Login.js";
+import Metrics from "./Metrics.js";
 import { errorMessage, request } from "./api.js";
-
-type Session = {
-  email: string;
-  password: string;
-  accessToken: string;
-  refreshToken: string;
-};
 
 type State = {
   file: File | null;
@@ -23,107 +23,24 @@ type State = {
   askLoading: boolean;
 };
 
-const SESSION_KEY = "asksight.dashboard.session";
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
-let session: Session | null = null;
-
-function storedSession(): Session | null {
-  try {
-    const raw = window.localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.accessToken && parsed?.refreshToken && parsed?.email
-      ? parsed
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function persist(next: Session): Session {
-  session = next;
-  window.localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-  return next;
-}
-
-async function signIn(email: string, password: string) {
-  const result = await request("/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
-  if (!result.ok) throw new Error(result.error);
-  return result.body;
-}
-
-async function refreshSession(current: Session): Promise<Session> {
-  const result = await request("/auth/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: current.refreshToken }),
-  });
-
-  if (result.ok) {
-    return persist({
-      ...current,
-      accessToken: result.body.access_token,
-      refreshToken: result.body.refresh_token,
-    });
-  }
-
-  // The refresh token was rotated or revoked; the stored credentials recover it.
-  const tokens = await signIn(current.email, current.password);
-  return persist({
-    ...current,
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-  });
-}
-
-function randomId(): string {
-  if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-}
-
-async function ensureSession(): Promise<Session> {
-  const current = storedSession();
-  if (current) {
-    try {
-      return await refreshSession(current);
-    } catch (cause) {
-      // A network failure will fail signup too; surface it instead of guessing.
-      if (errorMessage(cause).startsWith("Cannot reach")) throw cause;
-    }
-  }
-
-  // No login screen: this browser gets its own throwaway account once.
-  const id = randomId().replace(/-/g, "").slice(0, 12);
-  const email = `dashboard.${id}@example.com`;
-  const password = randomId();
-
-  const signup = await request("/auth/signup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: "Dashboard", email, password }),
-  });
-  if (!signup.ok && signup.status !== 409) throw new Error(signup.error);
-
-  const tokens = await signIn(email, password);
-  return persist({
-    email,
-    password,
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-  });
-}
+// The test console's upload/ask helpers are plain functions, so keep the
+// current token here as well as in React state.
+let session: AdminSession | null = readSession();
+let onUnauthorized: () => void = () => {};
 
 async function api(path: string, init: RequestInit = {}) {
-  if (!session) throw new Error("The dashboard is not connected to the backend.");
+  if (!session) throw new Error("Sign in to use the console.");
 
   let result = await request(path, init, session.accessToken);
   if (result.status === 401) {
-    session = await refreshSession(session);
+    try {
+      session = await refreshSession(session);
+    } catch (cause) {
+      onUnauthorized();
+      throw cause;
+    }
     result = await request(path, init, session.accessToken);
   }
   if (!result.ok) {
@@ -156,6 +73,27 @@ function TestIcon() {
   );
 }
 
+function MetricsIcon() {
+  return (
+    <svg
+      className="a11s-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 20h18" />
+      <path d="M6 20v-6" />
+      <path d="M11 20V7" />
+      <path d="M16 20v-9" />
+      <path d="M21 20V4" />
+    </svg>
+  );
+}
+
 function UsageIcon() {
   return (
     <svg
@@ -177,9 +115,9 @@ function UsageIcon() {
 }
 
 export default function Dashboard() {
-  const [connected, setConnected] = React.useState(false);
-  const [connecting, setConnecting] = React.useState(true);
-  const [connectionError, setConnectionError] = React.useState("");
+  const [activeSession, setActiveSession] = React.useState<AdminSession | null>(
+    () => readSession(),
+  );
   const [state, setState] = React.useState<State>({
     file: null,
     preview: "",
@@ -192,25 +130,51 @@ export default function Dashboard() {
     uploadLoading: false,
     askLoading: false,
   });
-  const [view, setView] = React.useState<"test" | "usage">("test");
-
-  const connect = React.useCallback(() => {
-    setConnecting(true);
-    setConnectionError("");
-    ensureSession()
-      .then(() => {
-        setConnected(true);
-        setConnecting(false);
-      })
-      .catch((cause) => {
-        setConnectionError(errorMessage(cause));
-        setConnecting(false);
-      });
-  }, []);
+  const [view, setView] = React.useState<"test" | "usage" | "metrics">("test");
 
   React.useEffect(() => {
-    connect();
-  }, [connect]);
+    onUnauthorized = () => {
+      clearSession();
+      setActiveSession(null);
+    };
+    return () => {
+      onUnauthorized = () => {};
+    };
+  }, []);
+
+  function signedIn(next: AdminSession) {
+    session = next;
+    setActiveSession(next);
+  }
+
+  async function signOut() {
+    if (session) {
+      try {
+        await request("/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ refresh_token: session.refreshToken }),
+        });
+      } catch {
+        // Losing the network must not trap the user in the console.
+      }
+    }
+    clearSession();
+    session = null;
+    setActiveSession(null);
+    setState({
+      file: null,
+      preview: "",
+      imageId: "",
+      question: "",
+      answer: "",
+      model: "",
+      error: "",
+      status: "",
+      uploadLoading: false,
+      askLoading: false,
+    });
+  }
 
   async function uploadPhoto() {
     if (!state.file) return;
@@ -300,6 +264,8 @@ export default function Dashboard() {
     });
   }
 
+  if (!activeSession) return <Login onSignedIn={signedIn} />;
+
   return (
     <div className="a11s-shell">
       <aside className="a11s-sidebar">
@@ -329,17 +295,27 @@ export default function Dashboard() {
             <UsageIcon />
             <span>Usage</span>
           </button>
+          <button
+            className="a11s-nav-item"
+            aria-current={view === "metrics" ? "page" : undefined}
+            onClick={() => setView("metrics")}
+          >
+            <MetricsIcon />
+            <span>Metrics</span>
+          </button>
         </nav>
 
         <div className="a11s-sidebar-foot">
-          <span className={`a11s-status-pill ${connected ? "is-live" : ""}`}>
+          <span className="a11s-status-pill is-live">
             <span className="a11s-dot" aria-hidden="true" />
-            {connected
-              ? "Backend connected"
-              : connecting
-                ? "Connecting…"
-                : "Backend offline"}
+            Backend connected
           </span>
+          <span className="a11s-account" title={activeSession.email}>
+            {activeSession.email}
+          </span>
+          <button className="a11s-button a11s-button-ghost" onClick={signOut}>
+            Sign out
+          </button>
           <span className="a11s-version">Model ops · local</span>
         </div>
       </aside>
@@ -350,14 +326,22 @@ export default function Dashboard() {
             <p className="a11s-eyebrow">
               {view === "test" ? "Workspace" : "Analytics"}
             </p>
-            <h1>{view === "test" ? "Test console" : "Usage"}</h1>
+            <h1>
+              {view === "test"
+                ? "Test console"
+                : view === "metrics"
+                  ? "Metrics"
+                  : "Usage"}
+            </h1>
             <p className="a11s-muted">
               {view === "test"
                 ? "Upload a photo, ask a question, read the text answer."
-                : "Users, images, questions, and the latest answers."}
+                : view === "metrics"
+                  ? "Grafana charts backed by Prometheus scraping /metrics."
+                  : "Users, images, questions, and the latest answers."}
             </p>
           </div>
-          {view === "test" && connected ? (
+          {view === "test" ? (
             <span className="a11s-pill">
               <span className="a11s-dot" aria-hidden="true" />
               Live
@@ -366,149 +350,138 @@ export default function Dashboard() {
         </header>
 
         <div className="a11s-content">
-      {view === "usage" ? (
-        <Admin />
-      ) : !connected ? (
-        <section className="a11s-card a11s-connect">
-          {connecting ? (
-            <p className="a11s-muted" role="status">
-              Connecting to the backend…
-            </p>
+          {view === "metrics" ? (
+            <Metrics />
+          ) : view === "usage" ? (
+            <Admin
+              session={activeSession}
+              onSession={signedIn}
+              onUnauthorized={onUnauthorized}
+            />
           ) : (
             <>
-              <p className="a11s-error" role="alert">
-                {connectionError}
+              {state.error ? (
+                <p className="a11s-error a11s-banner" role="alert">
+                  {state.error}
+                </p>
+              ) : null}
+
+              <div className="a11s-grid">
+                <section className="a11s-card" aria-labelledby="photo-heading">
+                  <span className="a11s-card-kicker">Step 1</span>
+                  <h2 id="photo-heading">Photo</h2>
+
+                  <div className="a11s-photo">
+                    {state.preview ? (
+                      <img
+                        src={state.preview}
+                        alt="Selected photo"
+                        className="a11s-photo-preview"
+                      />
+                    ) : (
+                      <div className="a11s-empty-photo">
+                        <span>Choose a photo to test the model.</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="a11s-file-row">
+                    <input
+                      id="photo-input"
+                      type="file"
+                      accept="image/*"
+                      onChange={onFile}
+                      className="a11s-file-input"
+                    />
+                    <label htmlFor="photo-input" className="a11s-file">
+                      Choose photo
+                    </label>
+                    <button
+                      className="a11s-button"
+                      onClick={uploadPhoto}
+                      disabled={!state.file || state.uploadLoading}
+                    >
+                      {state.uploadLoading ? "Uploading…" : "Upload"}
+                    </button>
+                  </div>
+                  <p className="a11s-hint">
+                    {state.file ? state.file.name : "JPEG or PNG, up to 10 MB."}
+                  </p>
+
+                  {state.imageId ? (
+                    <p className="a11s-ok">
+                      <span className="a11s-check" aria-hidden="true">
+                        ✓
+                      </span>
+                      Photo uploaded
+                    </p>
+                  ) : null}
+                </section>
+
+                <section className="a11s-card" aria-labelledby="question-heading">
+                  <span className="a11s-card-kicker">Step 2</span>
+                  <h2 id="question-heading">Question</h2>
+                  <label htmlFor="question-input" className="a11s-label">
+                    Ask about the photo (text only)
+                  </label>
+                  <textarea
+                    id="question-input"
+                    className="a11s-input"
+                    value={state.question}
+                    placeholder="What do you see?"
+                    rows={3}
+                    onChange={(event) =>
+                      setState((s) => ({ ...s, question: event.target.value }))
+                    }
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        !event.shiftKey &&
+                        state.imageId &&
+                        state.question.trim() &&
+                        !state.askLoading
+                      ) {
+                        event.preventDefault();
+                        ask();
+                      }
+                    }}
+                  />
+                  <div className="a11s-actions">
+                    <button
+                      className="a11s-button"
+                      onClick={ask}
+                      disabled={
+                        !state.imageId || !state.question.trim() || state.askLoading
+                      }
+                    >
+                      {state.askLoading ? "Asking…" : "Ask"}
+                    </button>
+                    <span className="a11s-hint">
+                      Enter to ask · Shift+Enter for a new line
+                    </span>
+                  </div>
+
+                  <h2 className="a11s-answer-heading">Answer</h2>
+                  {state.answer ? (
+                    <div className="a11s-answer">
+                      <p>{state.answer}</p>
+                      {state.model ? (
+                        <p className="a11s-meta">Model: {state.model}</p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="a11s-answer a11s-answer-empty">
+                      The model's answer will appear here.
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              <p className="a11s-status" role="status" aria-live="polite">
+                {state.status}
               </p>
-              <button className="a11s-button" onClick={connect}>
-                Retry connection
-              </button>
             </>
           )}
-        </section>
-      ) : (
-        <>
-      {state.error ? (
-        <p className="a11s-error a11s-banner" role="alert">
-          {state.error}
-        </p>
-      ) : null}
-
-      <div className="a11s-grid">
-        <section className="a11s-card" aria-labelledby="photo-heading">
-          <span className="a11s-card-kicker">Step 1</span>
-          <h2 id="photo-heading">Photo</h2>
-
-          <div className="a11s-photo">
-            {state.preview ? (
-              <img
-                src={state.preview}
-                alt="Selected photo"
-                className="a11s-photo-preview"
-              />
-            ) : (
-              <div className="a11s-empty-photo">
-                <span>Choose a photo to test the model.</span>
-              </div>
-            )}
-          </div>
-
-          <div className="a11s-file-row">
-            <input
-              id="photo-input"
-              type="file"
-              accept="image/*"
-              onChange={onFile}
-              className="a11s-file-input"
-            />
-            <label htmlFor="photo-input" className="a11s-file">
-              Choose photo
-            </label>
-            <button
-              className="a11s-button"
-              onClick={uploadPhoto}
-              disabled={!state.file || state.uploadLoading}
-            >
-              {state.uploadLoading ? "Uploading…" : "Upload"}
-            </button>
-          </div>
-          <p className="a11s-hint">
-            {state.file
-              ? state.file.name
-              : "JPEG or PNG, up to 10 MB."}
-          </p>
-
-          {state.imageId ? (
-            <p className="a11s-ok">
-              <span className="a11s-check" aria-hidden="true">
-                ✓
-              </span>
-              Photo uploaded
-            </p>
-          ) : null}
-        </section>
-
-        <section className="a11s-card" aria-labelledby="question-heading">
-          <span className="a11s-card-kicker">Step 2</span>
-          <h2 id="question-heading">Question</h2>
-          <label htmlFor="question-input" className="a11s-label">
-            Ask about the photo (text only)
-          </label>
-          <textarea
-            id="question-input"
-            className="a11s-input"
-            value={state.question}
-            placeholder="What do you see?"
-            rows={3}
-            onChange={(event) =>
-              setState((s) => ({ ...s, question: event.target.value }))
-            }
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                state.imageId &&
-                state.question.trim() &&
-                !state.askLoading
-              ) {
-                event.preventDefault();
-                ask();
-              }
-            }}
-          />
-          <div className="a11s-actions">
-            <button
-              className="a11s-button"
-              onClick={ask}
-              disabled={
-                !state.imageId || !state.question.trim() || state.askLoading
-              }
-            >
-              {state.askLoading ? "Asking…" : "Ask"}
-            </button>
-            <span className="a11s-hint">Enter to ask · Shift+Enter for a new line</span>
-          </div>
-
-          <h2 className="a11s-answer-heading">Answer</h2>
-          {state.answer ? (
-            <div className="a11s-answer">
-              <p>{state.answer}</p>
-              {state.model ? (
-                <p className="a11s-meta">Model: {state.model}</p>
-              ) : null}
-            </div>
-          ) : (
-            <div className="a11s-answer a11s-answer-empty">
-              The model's answer will appear here.
-            </div>
-          )}
-        </section>
-      </div>
-
-      <p className="a11s-status" role="status" aria-live="polite">
-        {state.status}
-      </p>
-        </>
-      )}
         </div>
       </section>
     </div>

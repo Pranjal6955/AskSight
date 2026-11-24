@@ -1,16 +1,13 @@
 """Read-only usage data for the admin dashboard.
 
-Two ways in, both because the view shows every user's activity:
-
-- An admin account (email listed in `ADMIN_EMAILS`) with a normal bearer token.
-- A shared `X-Admin-Token` for scripts and curl.
+The view shows every user's activity, so it needs a bearer token signed with
+the JWT secret from the environment, belonging to a user whose database role
+is ADMIN. Sign in at /auth/login to get that token.
 """
 
-import os
-import secrets
-
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from prisma.enums import Role
 
 from app.core.dependencies import get_user_from_token
 from app.db import db
@@ -24,9 +21,6 @@ from app.schema.admin import (
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-ADMIN_TOKEN_ENV = "ADMIN_TOKEN"
-ADMIN_EMAILS_ENV = "ADMIN_EMAILS"
-ADMIN_DISABLED = "The admin view is disabled. Set ADMIN_EMAILS or ADMIN_TOKEN on the backend."
 INVALID_ADMIN_CREDENTIALS = "Invalid admin credentials."
 
 MAX_USERS = 100  # shortcut: table shows the newest 100 users, paginate when the base grows
@@ -34,24 +28,12 @@ MAX_USERS = 100  # shortcut: table shows the newest 100 users, paginate when the
 admin_bearer = HTTPBearer(auto_error=False)
 
 
-def admin_emails() -> set[str]:
-    raw = os.getenv(ADMIN_EMAILS_ENV, "")
-    return {email.strip().lower() for email in raw.split(",") if email.strip()}
-
-
 async def require_admin(
-    x_admin_token: str = Header(default=""),
     credentials: HTTPAuthorizationCredentials | None = Depends(admin_bearer),
 ) -> None:
-    expected = os.getenv(ADMIN_TOKEN_ENV, "")
-    emails = admin_emails()
-    if not expected and not emails:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=ADMIN_DISABLED)
-    if expected and x_admin_token and secrets.compare_digest(x_admin_token, expected):
-        return
-    if credentials and emails:
+    if credentials:
         user = await get_user_from_token(credentials.credentials)
-        if user.email.strip().lower() in emails:
+        if getattr(user, "role", None) == Role.ADMIN:
             return
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=INVALID_ADMIN_CREDENTIALS)
 

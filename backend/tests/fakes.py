@@ -74,6 +74,7 @@ class FakeUserDelegate(_Delegate):
             name=data["name"],
             email=data["email"],
             password=data["password"],
+            role=data.get("role", "USER"),
             createdAt=datetime.now(UTC),
         )
         self.records[user.id] = user

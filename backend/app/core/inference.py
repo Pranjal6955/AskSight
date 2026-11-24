@@ -7,10 +7,17 @@ torch is only imported in that case, so the auth dev environment stays light.
 
 import importlib
 import os
+import sys
 from functools import lru_cache
+from pathlib import Path
 
 MODEL_CHECKPOINT_ENV = "ASKSIGHT_MODEL_CHECKPOINT"
 MAX_QUESTION_CHARS = 500
+
+# A failed load is remembered too: retrying a multi-GB download on every
+# request would block the async server and hide the real error behind a 500.
+_load_error: RuntimeError | None = None
+_service: object | None = None
 
 
 class DevMockInferenceService:
@@ -29,22 +36,54 @@ class DevMockInferenceService:
 
 @lru_cache(maxsize=1)
 def get_inference_service():
+    """Return the cached inference service, or raise a cached load error."""
+    global _load_error
+    if _load_error is not None:
+        raise _load_error
+
+    global _service
+
     checkpoint_dir = os.getenv(MODEL_CHECKPOINT_ENV)
     if not checkpoint_dir:
-        return DevMockInferenceService()
+        _service = DevMockInferenceService()
+        return _service
 
     try:
-        import sys
-        from pathlib import Path
         model_dir = str(Path(__file__).resolve().parents[3] / "model")
         if model_dir not in sys.path:
             sys.path.insert(0, model_dir)
+        model_package = importlib.import_module("asksight_model")
+        _service = model_package.LocalInferenceService(checkpoint_dir=checkpoint_dir)
+        return _service
+    except Exception as exc:
+        if isinstance(exc, ImportError):
+            message = (
+                f"{MODEL_CHECKPOINT_ENV} is set to '{checkpoint_dir}' but asksight_model"
+                " could not be loaded. Run `pip install -e ../model` or unset"
+                f" {MODEL_CHECKPOINT_ENV} to keep the mock."
+            )
+        else:
+            message = f"{MODEL_CHECKPOINT_ENV}='{checkpoint_dir}' could not be loaded: {exc}"
+        _load_error = RuntimeError(message)
+        raise _load_error from exc
 
-        import asksight_model
-        return asksight_model.LocalInferenceService()
-    except ImportError as exc:
-        raise RuntimeError(
-            f"{MODEL_CHECKPOINT_ENV} is set to '{checkpoint_dir}' but asksight_model"
-            " could not be loaded. Run `pip install -e ../model` or unset"
-            f" {MODEL_CHECKPOINT_ENV} to keep the mock."
-        ) from exc
+
+def clear_cache() -> None:
+    """Forget the cached service and any cached load error."""
+    global _load_error, _service
+    _load_error = None
+    _service = None
+    get_inference_service.cache_clear()
+
+
+def cached_service() -> object | None:
+    """The already-created service, or None. Never starts a load."""
+    return _service
+
+
+def inference_status() -> tuple[object | None, RuntimeError | None]:
+    """Cached service and error, without starting a new load."""
+    try:
+        return get_inference_service(), None
+    except RuntimeError as err:
+        return None, err

@@ -112,7 +112,8 @@ report with a server log line.
 
 Rate limits are in-memory (per process) and answer **429** with
 `"Too many requests. Please wait a moment and try again."`. GET endpoints are
-never rate-limited.
+never rate-limited. Per-IP limits need real client addresses: behind a reverse
+proxy, start uvicorn with `--proxy-headers --forwarded-allow-ips=<proxy ip>`.
 
 ### Model versioning
 
@@ -291,11 +292,10 @@ behind one `app/core/storage.py` interface (`save` / `read` / `delete`) so the
 routes never know which backend is in use. Storage keys are opaque
 (`<uuid4-hex>.<ext>`) and never derived from user-supplied names.
 
-**Decision — retention:** images are stored **until the user deletes them**.
-There is no automatic expiry. The user can delete one image, one history
-entry, or everything (`DELETE /images/{id}`, `DELETE /history/{id}`,
-`DELETE /history`); deletion removes the bytes and the row together, and
-deleting a user cascades to all of their images and entries.
+**Decision — retention:** images are stored **until the user deletes them**
+with `DELETE /images/{id}`. There is no automatic expiry, and deleting history
+does not delete images. Deleting an image removes its bytes and its row, and
+cascades to the history entries that used it.
 
 ### `GET /images/{image_id}`
 
@@ -494,18 +494,14 @@ owned by another user.
 ### `DELETE /history/{entry_id}`
 
 Deletes the entry. **204** on success. **404** — unknown id or owned by
-another user.
-
-The image is **not** deleted while other entries still reference it: a user
-who deletes one question may still want to ask another about the same photo.
-When this was the **last** entry for its image, the image bytes and row are
-removed too (bytes first). The user can also delete the image directly at any
-time with `DELETE /images/{image_id}`.
+another user. The image stays: a user may still want to ask another question
+about the same photo, and an in-flight `/ask` must not have its answer deleted
+underneath it. Delete the photo explicitly with `DELETE /images/{image_id}`.
 
 ### `DELETE /history`
 
-Deletes every history entry and image owned by the user, bytes before rows.
-**204** on success. Other users' data is untouched.
+Deletes every history entry owned by the user. **204** on success. Other users'
+data is untouched. Images are kept until deleted with `DELETE /images/{id}`.
 
 ---
 

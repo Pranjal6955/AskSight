@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from jwt.exceptions import InvalidTokenError
+from prisma.errors import UniqueViolationError
 
 from app.core.dependencies import get_current_user
 from app.core.rate_limit import per_ip
@@ -42,9 +43,16 @@ async def signup(payload: SignupRequest):
 
     hashed_password = hash_password(payload.password)
 
-    user = await db.user.create(
-        data={"name": payload.name.strip(), "email": email, "password": hashed_password}
-    )
+    try:
+        user = await db.user.create(
+            data={"name": payload.name.strip(), "email": email, "password": hashed_password}
+        )
+    except UniqueViolationError as err:
+        # Two signups can both pass the check above; the unique index decides.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An Account with this email Already exists",
+        ) from err
 
     return UserResponse(
         id=user.id,

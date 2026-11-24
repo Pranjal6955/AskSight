@@ -23,8 +23,8 @@ class FakeModel:
 class TestHealth(unittest.TestCase):
     def setUp(self):
         patch_db(self)
-        inference.get_inference_service.cache_clear()
-        self.addCleanup(inference.get_inference_service.cache_clear)
+        inference.clear_cache()
+        self.addCleanup(inference.clear_cache)
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
 

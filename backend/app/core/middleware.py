@@ -15,6 +15,8 @@ import uuid
 from contextvars import ContextVar
 from datetime import UTC, datetime
 
+from app.core import metrics
+
 # A client-supplied id is echoed only when it is short and printable, so a
 # hostile header cannot inject newlines or control characters into a log line.
 SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -79,6 +81,10 @@ class RequestContextMiddleware:
         try:
             await self.app(scope, receive, send_wrapper)
         finally:
+            duration = time.perf_counter() - started
+            route = getattr(scope.get("route"), "path", None) or "unmatched"
+            metrics.HTTP_REQUESTS.labels(scope["method"], route, str(status_code)).inc()
+            metrics.HTTP_DURATION.labels(scope["method"], route).observe(duration)
             logger.info(
                 json.dumps(
                     {
@@ -87,7 +93,7 @@ class RequestContextMiddleware:
                         "method": scope["method"],
                         "path": scope["path"],
                         "status": status_code,
-                        "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                        "duration_ms": round(duration * 1000, 1),
                     },
                     separators=(",", ":"),
                 )
