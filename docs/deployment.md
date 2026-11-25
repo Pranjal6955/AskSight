@@ -1,5 +1,8 @@
 # Deployment guide
 
+For a single AWS EC2 GPU host running the real Qwen3-VL model, see
+[Deploying AskSight on EC2](deployment-ec2.md).
+
 The backend is one FastAPI process, PostgreSQL, and file or S3 storage. Rate
 limits are in memory, so keep one uvicorn worker until they move to shared
 storage.
@@ -50,7 +53,7 @@ Install the model package in the same environment and point the backend at a
 verified checkpoint directory:
 
 ```bash
-cd ../model
+cd model
 pip install -e .
 python -m asksight_model.verify --checkpoint checkpoints/<version> --strict
 ```
