@@ -49,7 +49,7 @@ def get_inference_service():
         return _service
 
     try:
-        model_dir = str(Path(__file__).resolve().parents[3] / "model")
+        model_dir = str(Path(__file__).resolve().parents[2] / "model")
         if model_dir not in sys.path:
             sys.path.insert(0, model_dir)
         model_package = importlib.import_module("asksight_model")
@@ -59,7 +59,7 @@ def get_inference_service():
         if isinstance(exc, ImportError):
             message = (
                 f"{MODEL_CHECKPOINT_ENV} is set to '{checkpoint_dir}' but asksight_model"
-                " could not be loaded. Run `pip install -e ../model` or unset"
+                " could not be loaded. Run `pip install -e model` or unset"
                 f" {MODEL_CHECKPOINT_ENV} to keep the mock."
             )
         else:

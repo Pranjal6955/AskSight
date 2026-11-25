@@ -128,7 +128,7 @@ saw 100 questions; do not demo it.
 
 ### Full run — Google Colab T4 or Kaggle (recommended)
 
-`model/notebooks/colab_train.ipynb` (committed to the repo so Colab can clone it):
+`backend/model/notebooks/colab_train.ipynb` (committed to the repo so Colab can clone it):
 
 1. Upload the notebook to Colab (File → Upload notebook) or Kaggle (File → Import notebook).
 2. Defaults: `VERSION=v0.2-20k`, 20,000/1,000/1,000 questions, `DTYPE=float16`
@@ -150,7 +150,7 @@ v0.2-20k-ckpt.zip
 ```
 
 The notebook clones `feat/multimodal-core-workflow` — `main` does not carry
-`model/` yet, so a plain default-branch clone would fail at `%cd AskSight/model`.
+`model/` yet, so a plain default-branch clone would fail at `%cd AskSight/backend/model`.
 
 Free notebook runtimes and GPU availability can vary, and the current trainer
 saves its checkpoint at the end of a run only. Start with 20k; a 50k run may
@@ -165,7 +165,7 @@ ephemeral — the zip is the saved result.
 ### Kaggle run steps
 
 1. Push the current notebook and model changes to `feat/multimodal-core-workflow`.
-2. In Kaggle, create a Notebook, import `model/notebooks/colab_train.ipynb`,
+2. In Kaggle, create a Notebook, import `backend/model/notebooks/colab_train.ipynb`,
    and set **Settings → Accelerator → GPU** and **Internet → On**.
 3. Keep the default 20k counts for the first run. Select **Run all** and watch
    the output for the data, training, evaluation, and zip steps.

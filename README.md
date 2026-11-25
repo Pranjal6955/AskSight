@@ -29,13 +29,13 @@ Point your camera at a menu, a label, a sign, or anything else — ask a questio
 
 ## Training
 
-The model lives in `model/` and is trained in two ways — same code, different scale:
+The model lives in `backend/model/` and is trained in two ways — same code, different scale:
 
 - **Smoke run (any laptop, CPU, ~10 min)** — verifies dataset → training → checkpoint end to end:
   `python -m asksight_model.train --config configs/default.yaml --device cpu --limit 100 --version v0.1-smoke`
 - **Full run (Colab or Kaggle GPU)** — the notebook defaults to 20,000 VQA questions; 50,000 is configurable. Add optional image/question/answer examples for photo descriptions using its custom examples cell. Runtime depends on the available GPU, and free notebook sessions can end before larger runs finish.
 
-Expected outputs for both, plus serving instructions, are documented in [`model/README.md`](model/README.md#training-runs). Point the backend at a checkpoint with `ASKSIGHT_MODEL_CHECKPOINT=<dir>`.
+Expected outputs for both, plus serving instructions, are documented in [`backend/model/README.md`](backend/model/README.md#training-runs). Point the backend at a checkpoint with `ASKSIGHT_MODEL_CHECKPOINT=<dir>`.
 
 ## How It Works
 
@@ -50,8 +50,8 @@ Expected outputs for both, plus serving instructions, are documented in [`model/
 ```
 AskSight/
 ├── backend/          # FastAPI app, Prisma schema, tests
+│   └── model/        # Training code and inference service
 ├── ui/               # Expo mobile app
-├── model/            # Training code and inference service
 ├── docs/             # API contract and deployment guide
 ```
 

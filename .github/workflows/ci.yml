@@ -44,7 +44,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: model
+        working-directory: backend/model
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7

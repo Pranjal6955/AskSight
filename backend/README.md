@@ -90,14 +90,14 @@ To load a trained checkpoint, install the model package in its own environment
 or in the backend environment:
 
 ```bash
-cd ../model
+cd model
 pip install -e .
 ```
 
 Then set the checkpoint path in `backend/.env`, for example:
 
 ```env
-ASKSIGHT_MODEL_CHECKPOINT=../model/checkpoints/qwen3_vl_qlora
+ASKSIGHT_MODEL_CHECKPOINT=model/checkpoints/qwen3_vl_qlora
 ```
 
 The directory can hold a full Hugging Face model or a QLoRA adapter plus its

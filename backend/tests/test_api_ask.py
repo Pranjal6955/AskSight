@@ -234,7 +234,7 @@ class TestGetInferenceService(unittest.TestCase):
             inference.get_inference_service()
         message = str(ctx.exception)
         self.assertIn(inference.MODEL_CHECKPOINT_ENV, message)
-        self.assertIn("pip install -e ../model", message)
+        self.assertIn("pip install -e model", message)
 
     def test_checkpoint_path_is_passed_to_the_model_service(self):
         service = SimpleNamespace(model_version="checkpoint-v1")
