@@ -73,27 +73,10 @@ address instead of the proxy's.
 The API is available at <http://localhost:8000>.
 
 - Swagger UI: <http://localhost:8000/docs>
-- Dashboard: <http://localhost:8000/dashboard/>
 - Liveness: <http://localhost:8000/health/live>
 - Readiness: <http://localhost:8000/health/ready>
 - Model status: <http://localhost:8000/health/model>
 - Prometheus metrics: <http://localhost:8000/metrics> (keep this internal)
-
-The test console needs a build first: `cd admin-dashboard && npm install && npm run build`.
-For local frontend work, `npm run dev` serves it on <http://localhost:5173> and
-proxies `/auth`, `/images`, `/ask`, `/health` and `/admin` to the API.
-
-The dashboard's Usage tab signs in with an admin account. Create or reset one
-with an explicit password:
-
-```bash
-python -m scripts.seed_admin you@example.com '<strong-password>'
-```
-
-No default password ships with the script. It creates the account with the
-`ADMIN` database role, which is what gates `/admin/*`. Sign in through
-`/auth/login` to get the JWT bearer token; the same JWT secret from `.env`
-signs every user's tokens. Scripts can do the same with curl.
 
 `/health/ready` requires both the database and inference service to be
 available.

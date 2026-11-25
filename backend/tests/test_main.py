@@ -1,6 +1,4 @@
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -24,7 +22,6 @@ class TestRouting(unittest.TestCase):
                 "/auth/refresh",
                 "/auth/logout",
                 "/auth/me",
-                "/admin/overview",
                 "/images",
                 "/images/{image_id}",
                 "/ask",
@@ -46,24 +43,6 @@ class TestRouting(unittest.TestCase):
     def test_declares_201_created_for_signup(self):
         op = self.client.get("/openapi.json").json()["paths"]["/auth/signup"]["post"]
         self.assertIn("201", op["responses"])
-
-
-class TestDashboardMount(unittest.TestCase):
-    def test_missing_build_directory_does_not_break_startup(self):
-        missing = Path(tempfile.gettempdir()) / "asksight-dashboard-not-built"
-        with patch.object(main, "DASHBOARD_DIR", missing):
-            application = main.create_app()
-        self.assertNotIn(
-            "/dashboard", {getattr(route, "path", None) for route in application.routes}
-        )
-
-    def test_built_dashboard_is_mounted(self):
-        with (
-            tempfile.TemporaryDirectory() as directory,
-            patch.object(main, "DASHBOARD_DIR", Path(directory)),
-        ):
-            application = main.create_app()
-        self.assertIn("/dashboard", {getattr(route, "path", None) for route in application.routes})
 
 
 class TestLifespan(unittest.TestCase):

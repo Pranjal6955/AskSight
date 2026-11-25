@@ -15,15 +15,6 @@ prisma generate
 prisma migrate deploy
 ```
 
-Build the admin dashboard before starting the API; otherwise `/dashboard` is
-not mounted (the rest of the API still works):
-
-```bash
-cd ../admin-dashboard
-npm ci
-npm run build
-```
-
 ## 2. Configure
 
 Copy `backend/.env.example` to `backend/.env` and set:
@@ -31,9 +22,6 @@ Copy `backend/.env.example` to `backend/.env` and set:
 - `DATABASE_URL` — PostgreSQL connection string.
 - `JWT` — a fresh secret: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
   The app refuses to start while it is empty.
-- An admin account with the `ADMIN` role:
-  `python -m scripts.seed_admin you@example.com '<strong-password>'`.
-  Sign in at `/auth/login` to get the JWT bearer token that opens `/admin/*`.
 - `STORAGE_BACKEND` — `local` for one machine, `s3` with `STORAGE_S3_BUCKET`
   for anything else.
 - Optional: `ASKSIGHT_MODEL_CHECKPOINT`, `SARVAM_API_KEY`, `DEFAULT_LANGUAGE`.
@@ -72,28 +60,7 @@ Set `ASKSIGHT_MODEL_CHECKPOINT` to that directory. A QLoRA directory needs its
 adapter. Keep the Hugging Face cache (`HF_HOME`) on a persistent volume so
 restarts do not re-download the backbones.
 
-## 5. Monitoring
-
-The backend exposes `/metrics` in Prometheus format without authentication —
-keep it on an internal network. It reports request counts and latency by route
-template (never by user or image id), plus inference counts, p95 latency,
-readiness and process RSS from the loaded service's `stats()`.
-
-Prometheus and Grafana are a monitoring-only compose stack; the backend still
-runs on the host:
-
-```bash
-docker compose up -d
-```
-
-Prometheus is at <http://localhost:9090>, Grafana at <http://localhost:3000>
-(default `admin`/`admin` — change it on first login). The AskSight dashboard is
-provisioned automatically and embedded in the admin console's **Metrics** tab.
-Compose enables anonymous Grafana viewing and iframe embedding for that local
-demo; disable both before exposing Grafana publicly. On Linux,
-`host.docker.internal` is mapped to the host gateway in `docker-compose.yml`.
-
-## 6. Checks
+## 5. Checks
 
 ```bash
 cd backend

@@ -51,11 +51,8 @@ Expected outputs for both, plus serving instructions, are documented in [`model/
 AskSight/
 ├── backend/          # FastAPI app, Prisma schema, tests
 ├── ui/               # Expo mobile app
-├── admin-dashboard/  # React usage dashboard
 ├── model/            # Training code and inference service
-├── monitoring/       # Prometheus and Grafana config
 ├── docs/             # API contract and deployment guide
-└── docker-compose.yml  # Monitoring stack
 ```
 
 ## Status

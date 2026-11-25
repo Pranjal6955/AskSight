@@ -23,7 +23,7 @@ async def get_user_from_token(token: str):
             raise HTTPException(status_code=401, detail="Invalid token")
 
     except InvalidTokenError as err:
-        raise HTTPException(status_code=401, detail="Invaild or expired token") from err
+        raise HTTPException(status_code=401, detail="Invalid or expired token") from err
 
     user = await db.user.find_unique(where={"id": user_id})
     if not user:

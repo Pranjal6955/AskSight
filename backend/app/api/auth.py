@@ -38,7 +38,7 @@ async def signup(payload: SignupRequest):
 
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="An Account with this email Already exists"
+            status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists"
         )
 
     hashed_password = hash_password(payload.password)
@@ -51,7 +51,7 @@ async def signup(payload: SignupRequest):
         # Two signups can both pass the check above; the unique index decides.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An Account with this email Already exists",
+            detail="An account with this email already exists",
         ) from err
 
     return UserResponse(
