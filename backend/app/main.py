@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -9,6 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
 from app.api import ask, auth, health, history, images, metrics, speech  # noqa: E402
 from app.core.inference import get_inference_service  # noqa: E402
@@ -33,6 +35,16 @@ async def lifespan(_: FastAPI):
     await db.disconnect()
 
 
+def _cors_origins() -> list[str]:
+    """Browser origins allowed to call the API (Expo web in development).
+
+    Bearer tokens, not cookies, authenticate requests, so the wildcard default
+    is safe for local development. Set explicit origins in production.
+    """
+    raw = os.getenv("CORS_ORIGINS", "*")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 def create_app() -> FastAPI:
     setup_logging()
     application = FastAPI(
@@ -48,6 +60,15 @@ def create_app() -> FastAPI:
 
     # Outside the router dependencies, so even 401/404 responses carry the id.
     application.add_middleware(RequestContextMiddleware)
+    # Outermost, so browser preflights and error responses get CORS headers too.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["X-Request-ID"],
+    )
 
     application.include_router(health.router)
     application.include_router(metrics.router)

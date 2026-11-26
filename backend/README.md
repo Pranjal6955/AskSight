@@ -72,6 +72,10 @@ address instead of the proxy's.
 
 The API is available at <http://localhost:8000>.
 
+Expo web calls the API from a browser. `CORS_ORIGINS` controls which origins
+are allowed (comma-separated; default `*`, which is fine for local development
+because requests use bearer tokens, not cookies).
+
 - Swagger UI: <http://localhost:8000/docs>
 - Liveness: <http://localhost:8000/health/live>
 - Readiness: <http://localhost:8000/health/ready>

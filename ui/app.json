@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "AskSight",
+    "slug": "asksight",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "asksight",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F6F1E6",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.asksight.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.asksight.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#F6F1E6",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F6F1E6",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 120,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "AskSight uses your photos to answer your questions.",
+          "cameraPermission": "AskSight uses your camera to answer your questions.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "AskSight uses your microphone to hear your question."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

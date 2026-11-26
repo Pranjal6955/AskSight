@@ -45,6 +45,22 @@ class TestRouting(unittest.TestCase):
         self.assertIn("201", op["responses"])
 
 
+class TestCors(unittest.TestCase):
+    def test_preflight_allows_expo_web(self):
+        client = TestClient(main.app)
+        self.addCleanup(client.close)
+        response = client.options(
+            "/auth/login",
+            headers={
+                "Origin": "http://localhost:8081",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["access-control-allow-origin"], "*")
+
+
 class TestLifespan(unittest.TestCase):
     def test_connects_db_on_startup_and_disconnects_on_shutdown(self):
         fake = FakeDB()
