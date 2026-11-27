@@ -61,14 +61,8 @@ def check_image_quality(image: Image.Image) -> tuple[bool, str | None]:
                 tile_variances.append(float(cv2.Laplacian(tile, cv2.CV_64F).var()))
     laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     low_contrast = float(np.std(gray)) < 8.0
-    has_sharp_region = any(
-        value >= BLUR_LAPLACIAN_VAR_THRESHOLD for value in tile_variances
-    )
-    if (
-        laplacian_var < BLUR_LAPLACIAN_VAR_THRESHOLD
-        and not has_sharp_region
-        and not low_contrast
-    ):
+    has_sharp_region = any(value >= BLUR_LAPLACIAN_VAR_THRESHOLD for value in tile_variances)
+    if laplacian_var < BLUR_LAPLACIAN_VAR_THRESHOLD and not has_sharp_region and not low_contrast:
         return False, BLURRY_IMAGE_MESSAGE
 
     return True, None

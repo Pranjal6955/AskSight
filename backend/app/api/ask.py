@@ -75,9 +75,7 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
             status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=ASK_TOO_SLOW
         ) from exc
     except InferenceUnavailable as exc:
-        logger.error(
-            "inference_failed request_id=%s error=%s", get_request_id(), exc
-        )
+        logger.error("inference_failed request_id=%s error=%s", get_request_id(), exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=MODEL_UNAVAILABLE
         ) from exc

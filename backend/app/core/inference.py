@@ -133,9 +133,7 @@ class HuggingFaceInferenceService:
                 if not event_id:
                     raise InferenceUnavailable("The model did not return a request id.")
 
-                result = client.get(
-                    f"{self.space_url}/gradio_api/call/answer/{event_id}"
-                )
+                result = client.get(f"{self.space_url}/gradio_api/call/answer/{event_id}")
                 result.raise_for_status()
         except httpx.TimeoutException as exc:
             raise TimeoutError("The model took too long to answer.") from exc

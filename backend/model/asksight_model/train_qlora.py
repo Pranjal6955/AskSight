@@ -96,8 +96,7 @@ class AssistiveMultimodalDataset(Dataset):
             answer_value = item.get("answers")
         if isinstance(answer_value, list):
             answer_candidates = [
-                value.get("answer") if isinstance(value, dict) else value
-                for value in answer_value
+                value.get("answer") if isinstance(value, dict) else value for value in answer_value
             ]
             answer_candidates = [
                 value.strip()
