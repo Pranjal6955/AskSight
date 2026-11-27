@@ -198,10 +198,16 @@ async function uploadNativeFile<T>(
     // Use the HTTP status when the backend response is not JSON.
   }
   if (result.status < 200 || result.status >= 300) {
-    throw new ApiError(errorMessage(responseBody, result.status), result.status);
+    throw new ApiError(
+      errorMessage(responseBody, result.status),
+      result.status,
+    );
   }
   if (responseBody === undefined) {
-    throw new ApiError("AskSight returned an unreadable response.", result.status);
+    throw new ApiError(
+      "AskSight returned an unreadable response.",
+      result.status,
+    );
   }
   return responseBody as T;
 }
@@ -239,7 +245,10 @@ export function ask(
   });
 }
 
-export function deleteImage(accessToken: string, imageId: string): Promise<void> {
+export function deleteImage(
+  accessToken: string,
+  imageId: string,
+): Promise<void> {
   return request(`/images/${encodeURIComponent(imageId)}`, {
     method: "DELETE",
     headers: authHeaders(accessToken),

@@ -60,6 +60,10 @@ the [Space API schema](https://pranjal7777-asksight.hf.space/gradio_api/openapi.
 ## Checks
 
 ```bash
+npm run lint
+npm run format:check
 npx tsc --noEmit
 npx expo export --platform web
 ```
+
+Run `npm run format` to apply Prettier formatting.

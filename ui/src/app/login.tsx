@@ -1,11 +1,6 @@
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { AuthScreen } from "@/components/AuthScreen";
 import { ErrorBanner } from "@/components/ErrorBanner";

@@ -1,22 +1,13 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { router } from "expo-router";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import { useAuth } from "@/lib/auth";
-import {
-  cardShadow,
-  colors,
-  radius,
-  spacing,
-  tabBarSpace,
-} from "@/theme";
+import { cardShadow, colors, radius, spacing, tabBarSpace } from "@/theme";
 
 function memberSince(createdAt?: string): string {
   if (!createdAt) return "AskSight member";
@@ -51,9 +42,7 @@ export default function AccountScreen() {
           <Text accessibilityRole="header" style={styles.title}>
             Account
           </Text>
-          <Text style={styles.subtitle}>
-            Your profile details.
-          </Text>
+          <Text style={styles.subtitle}>Your profile details.</Text>
 
           <View style={styles.profileCard}>
             <View style={styles.avatar}>

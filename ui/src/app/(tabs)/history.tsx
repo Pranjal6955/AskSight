@@ -14,19 +14,16 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import type { HistoryItem } from "@/lib/api";
 import * as api from "@/lib/api";
 import { API_URL } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import {
-  cardShadow,
-  colors,
-  radius,
-  spacing,
-  tabBarSpace,
-} from "@/theme";
+import { cardShadow, colors, radius, spacing, tabBarSpace } from "@/theme";
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
@@ -48,7 +45,9 @@ export default function HistoryScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const speechPlayer = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
+  const speechPlayer = useRef<ReturnType<typeof createAudioPlayer> | null>(
+    null,
+  );
   const speechFile = useRef<File | null>(null);
   const speechUrl = useRef<string | null>(null);
 
@@ -120,12 +119,16 @@ export default function HistoryScreen() {
     try {
       await withAuth((token) => api.deleteHistoryItem(token, item.id));
       setItems((current) => current.filter((entry) => entry.id !== item.id));
-      setSelectedIds((current) => current.filter((selectedId) => selectedId !== item.id));
+      setSelectedIds((current) =>
+        current.filter((selectedId) => selectedId !== item.id),
+      );
       setExpandedId((current) => (current === item.id ? null : current));
       setDeletePromptId(null);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Could not delete this history item.",
+        cause instanceof Error
+          ? cause.message
+          : "Could not delete this history item.",
       );
     } finally {
       setDeletingId(null);
@@ -147,7 +150,9 @@ export default function HistoryScreen() {
   }
 
   async function deleteSelected() {
-    const targets = visibleItems.filter((item) => selectedIds.includes(item.id));
+    const targets = visibleItems.filter((item) =>
+      selectedIds.includes(item.id),
+    );
     if (targets.length === 0 || bulkDeleting) return;
 
     setBulkDeleting(true);
@@ -201,7 +206,10 @@ export default function HistoryScreen() {
         source = file.uri;
       }
 
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+      });
       speechPlayer.current = createAudioPlayer(source);
       speechPlayer.current.play();
     } catch (cause) {
@@ -243,8 +251,12 @@ export default function HistoryScreen() {
               History
             </Text>
             <View style={styles.countBadge}>
-              <Text accessibilityLabel={`${items.length}${hasMore ? " or more" : ""} saved entries`} style={styles.countText}>
-                {items.length}{hasMore ? "+" : ""}
+              <Text
+                accessibilityLabel={`${items.length}${hasMore ? " or more" : ""} saved entries`}
+                style={styles.countText}
+              >
+                {items.length}
+                {hasMore ? "+" : ""}
               </Text>
             </View>
           </View>
@@ -273,7 +285,11 @@ export default function HistoryScreen() {
                     onPress={() => setQuery("")}
                     hitSlop={8}
                   >
-                    <Ionicons name="close-circle" size={20} color={colors.muted} />
+                    <Ionicons
+                      name="close-circle"
+                      size={20}
+                      color={colors.muted}
+                    />
                   </Pressable>
                 ) : null}
               </View>
@@ -282,17 +298,29 @@ export default function HistoryScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`Sort ${sortOrder === "newest" ? "oldest" : "newest"} first`}
-                  onPress={() => setSortOrder((order) => order === "newest" ? "oldest" : "newest")}
+                  onPress={() =>
+                    setSortOrder((order) =>
+                      order === "newest" ? "oldest" : "newest",
+                    )
+                  }
                   style={({ pressed }) => [
                     styles.sortButton,
                     pressed && styles.controlPressed,
                   ]}
                 >
-                  <Ionicons name="swap-vertical" size={19} color={colors.primary} />
+                  <Ionicons
+                    name="swap-vertical"
+                    size={19}
+                    color={colors.primary}
+                  />
                   <Text style={styles.sortText}>
                     {sortOrder === "newest" ? "Newest first" : "Oldest first"}
                   </Text>
-                  <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                  <Ionicons
+                    name="chevron-down"
+                    size={16}
+                    color={colors.primary}
+                  />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -335,16 +363,22 @@ export default function HistoryScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={
                       visibleItems.length > 0 &&
-                      visibleItems.every((item) => selectedIds.includes(item.id))
+                      visibleItems.every((item) =>
+                        selectedIds.includes(item.id),
+                      )
                         ? "Clear selection"
                         : "Select all shown history items"
                     }
                     onPress={() => {
                       const allShownSelected =
                         visibleItems.length > 0 &&
-                        visibleItems.every((item) => selectedIds.includes(item.id));
+                        visibleItems.every((item) =>
+                          selectedIds.includes(item.id),
+                        );
                       setSelectedIds(
-                        allShownSelected ? [] : visibleItems.map((item) => item.id),
+                        allShownSelected
+                          ? []
+                          : visibleItems.map((item) => item.id),
                       );
                       setConfirmBulkDelete(false);
                     }}
@@ -352,7 +386,9 @@ export default function HistoryScreen() {
                   >
                     <Text style={styles.selectAllText}>
                       {visibleItems.length > 0 &&
-                      visibleItems.every((item) => selectedIds.includes(item.id))
+                      visibleItems.every((item) =>
+                        selectedIds.includes(item.id),
+                      )
                         ? "Clear all"
                         : "Select all shown"}
                     </Text>
@@ -365,10 +401,15 @@ export default function HistoryScreen() {
                     style={({ pressed }) => [
                       styles.bulkDeleteButton,
                       pressed && styles.bulkDeletePressed,
-                      (selectedIds.length === 0 || bulkDeleting) && styles.disabled,
+                      (selectedIds.length === 0 || bulkDeleting) &&
+                        styles.disabled,
                     ]}
                   >
-                    <Ionicons name="trash-outline" size={18} color={colors.white} />
+                    <Ionicons
+                      name="trash-outline"
+                      size={18}
+                      color={colors.white}
+                    />
                     <Text style={styles.bulkDeleteText}>
                       Delete ({selectedIds.length})
                     </Text>
@@ -379,7 +420,8 @@ export default function HistoryScreen() {
               {confirmBulkDelete ? (
                 <View style={styles.bulkDeleteConfirm}>
                   <Text style={styles.bulkDeleteConfirmTitle}>
-                    Delete {selectedIds.length} selected {selectedIds.length === 1 ? "entry" : "entries"}?
+                    Delete {selectedIds.length} selected{" "}
+                    {selectedIds.length === 1 ? "entry" : "entries"}?
                   </Text>
                   <Text style={styles.bulkDeleteConfirmHint}>
                     The saved answers will be removed. Photos will stay.
@@ -403,7 +445,11 @@ export default function HistoryScreen() {
                       {bulkDeleting ? (
                         <ActivityIndicator color={colors.white} size="small" />
                       ) : (
-                        <Ionicons name="trash-outline" size={18} color={colors.white} />
+                        <Ionicons
+                          name="trash-outline"
+                          size={18}
+                          color={colors.white}
+                        />
                       )}
                       <Text style={styles.confirmDeleteText}>
                         {bulkDeleting ? "Deleting…" : "Delete selected"}
@@ -427,7 +473,11 @@ export default function HistoryScreen() {
           ) : items.length === 0 ? (
             <View style={styles.emptyCard}>
               <View style={styles.iconCircle}>
-                <Ionicons name="time-outline" size={38} color={colors.primary} />
+                <Ionicons
+                  name="time-outline"
+                  size={38}
+                  color={colors.primary}
+                />
               </View>
               <Text style={styles.emptyTitle}>No questions yet</Text>
               <Text style={styles.emptyCopy}>
@@ -442,7 +492,11 @@ export default function HistoryScreen() {
                   pressed && styles.secondaryButtonPressed,
                 ]}
               >
-                <Ionicons name="camera-outline" size={22} color={colors.primary} />
+                <Ionicons
+                  name="camera-outline"
+                  size={22}
+                  color={colors.primary}
+                />
                 <Text style={styles.secondaryButtonText}>Ask something</Text>
               </Pressable>
             </View>
@@ -513,7 +567,9 @@ export default function HistoryScreen() {
                             }
                             source={{
                               uri: `${API_URL}${item.image_url}`,
-                              headers: { Authorization: `Bearer ${accessToken}` },
+                              headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                              },
                             }}
                             style={styles.entryImage}
                           />
@@ -533,7 +589,11 @@ export default function HistoryScreen() {
                       </View>
 
                       <View style={styles.entrySummaryContent}>
-                        <Text accessibilityRole="header" style={styles.question} numberOfLines={3}>
+                        <Text
+                          accessibilityRole="header"
+                          style={styles.question}
+                          numberOfLines={3}
+                        >
                           {item.question}
                         </Text>
                         <View style={styles.entrySummaryActions}>
@@ -541,7 +601,9 @@ export default function HistoryScreen() {
                             accessibilityRole="button"
                             accessibilityLabel={`${expanded ? "Collapse" : "Open"} history item: ${item.question}`}
                             accessibilityState={{ expanded }}
-                            onPress={() => setExpandedId(expanded ? null : item.id)}
+                            onPress={() =>
+                              setExpandedId(expanded ? null : item.id)
+                            }
                             style={({ pressed }) => [
                               styles.openDetailsButton,
                               pressed && styles.entryContentPressed,
@@ -559,7 +621,10 @@ export default function HistoryScreen() {
                           <Pressable
                             accessibilityRole="button"
                             accessibilityLabel={`${speaking ? "Playing" : "Listen to answer for"}: ${item.question}`}
-                            accessibilityState={{ busy: speaking, disabled: speakingId !== null }}
+                            accessibilityState={{
+                              busy: speaking,
+                              disabled: speakingId !== null,
+                            }}
                             disabled={speakingId !== null}
                             onPress={() => void listenToItem(item)}
                             style={({ pressed }) => [
@@ -569,7 +634,10 @@ export default function HistoryScreen() {
                             ]}
                           >
                             {speaking ? (
-                              <ActivityIndicator color={colors.white} size="small" />
+                              <ActivityIndicator
+                                color={colors.white}
+                                size="small"
+                              />
                             ) : (
                               <Ionicons
                                 name="volume-high"
@@ -586,7 +654,9 @@ export default function HistoryScreen() {
                       <View style={styles.entryDetails}>
                         <View style={styles.detailDivider} />
                         <Text style={styles.detailLabel}>Question</Text>
-                        <Text style={styles.questionDetail}>{item.question}</Text>
+                        <Text style={styles.questionDetail}>
+                          {item.question}
+                        </Text>
                         <Text style={styles.detailLabel}>Answer</Text>
                         <Text style={styles.answer}>{item.answer}</Text>
 

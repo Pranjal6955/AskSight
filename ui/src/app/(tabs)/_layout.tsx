@@ -25,6 +25,7 @@ export default function TabsLayout() {
               {
                 flex: 1,
                 height: "100%",
+                alignItems: "center",
                 justifyContent: "center",
                 borderRadius: 22,
               },
@@ -36,6 +37,11 @@ export default function TabsLayout() {
           lineHeight: 20,
           fontWeight: "800",
           marginBottom: 2,
+        },
+        tabBarIconStyle: {
+          alignSelf: "center",
+          marginHorizontal: 0,
+          transform: [{ translateY: 4 }],
         },
         tabBarItemStyle: {
           marginHorizontal: 4,

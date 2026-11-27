@@ -22,7 +22,10 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import * as api from "@/lib/api";
 import { ApiError } from "@/lib/api";
@@ -48,7 +51,9 @@ export default function HomeScreen() {
     "upload" | "transcribe" | "ask" | "speak" | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const speechPlayer = useRef<ReturnType<typeof createAudioPlayer> | null>(null);
+  const speechPlayer = useRef<ReturnType<typeof createAudioPlayer> | null>(
+    null,
+  );
   const speechFile = useRef<File | null>(null);
   const speechUrl = useRef<string | null>(null);
 
@@ -124,7 +129,9 @@ export default function HomeScreen() {
       });
       if (!result.canceled) await acceptPhoto(result.assets[0]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not open camera.");
+      setError(
+        cause instanceof Error ? cause.message : "Could not open camera.",
+      );
     }
   }
 
@@ -137,7 +144,9 @@ export default function HomeScreen() {
       });
       if (!result.canceled) await acceptPhoto(result.assets[0]);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not open photos.");
+      setError(
+        cause instanceof Error ? cause.message : "Could not open photos.",
+      );
     }
   }
 
@@ -176,7 +185,9 @@ export default function HomeScreen() {
         );
         setQuestion(result.transcript);
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : "Could not hear that.");
+        setError(
+          cause instanceof Error ? cause.message : "Could not hear that.",
+        );
       } finally {
         setBusy(null);
         try {
@@ -199,11 +210,16 @@ export default function HomeScreen() {
         setError("Allow microphone access to speak your question.");
         return;
       }
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
+      });
       await recorder.prepareToRecordAsync();
       recorder.record();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not start recording.");
+      setError(
+        cause instanceof Error ? cause.message : "Could not start recording.",
+      );
     }
   }
 
@@ -219,7 +235,8 @@ export default function HomeScreen() {
       setAnswer(result.answer);
       await speakAnswer(result.answer);
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "Could not get an answer.";
+      const message =
+        cause instanceof Error ? cause.message : "Could not get an answer.";
       setError(
         cause instanceof ApiError && cause.status === 503
           ? "AskSight is not ready. Try again soon."
@@ -253,11 +270,16 @@ export default function HomeScreen() {
         source = file.uri;
       }
 
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: false,
+      });
       speechPlayer.current = createAudioPlayer(source);
       speechPlayer.current.play();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not play the answer.");
+      setError(
+        cause instanceof Error ? cause.message : "Could not play the answer.",
+      );
     } finally {
       setBusy(null);
     }
@@ -291,7 +313,8 @@ export default function HomeScreen() {
           <View style={styles.content}>
             <View style={styles.welcome}>
               <Text accessibilityRole="header" style={styles.welcomeTitle}>
-                {greeting}{firstName ? `, ${firstName}` : ""}!
+                {greeting}
+                {firstName ? `, ${firstName}` : ""}!
               </Text>
             </View>
 
@@ -336,7 +359,9 @@ export default function HomeScreen() {
                       size={23}
                       color={colors.primary}
                     />
-                    <Text style={styles.linkButtonText}>Choose from library</Text>
+                    <Text style={styles.linkButtonText}>
+                      Choose from library
+                    </Text>
                   </Pressable>
                 </View>
 
@@ -351,7 +376,9 @@ export default function HomeScreen() {
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="Back to home"
-                  accessibilityState={{ disabled: busy !== null || isRecording }}
+                  accessibilityState={{
+                    disabled: busy !== null || isRecording,
+                  }}
                   disabled={busy !== null || isRecording}
                   onPress={removePhoto}
                   style={({ pressed }) => [
@@ -360,7 +387,11 @@ export default function HomeScreen() {
                     (busy !== null || isRecording) && styles.disabled,
                   ]}
                 >
-                  <Ionicons name="arrow-back" size={23} color={colors.primary} />
+                  <Ionicons
+                    name="arrow-back"
+                    size={23}
+                    color={colors.primary}
+                  />
                   <Text style={styles.backButtonText}>Back to home</Text>
                 </Pressable>
 
@@ -485,7 +516,10 @@ export default function HomeScreen() {
                 ) : null}
 
                 {answer ? (
-                  <View accessibilityLiveRegion="polite" style={styles.answerCard}>
+                  <View
+                    accessibilityLiveRegion="polite"
+                    style={styles.answerCard}
+                  >
                     <View style={styles.answerIcon}>
                       <Ionicons
                         name="volume-high"
@@ -494,7 +528,9 @@ export default function HomeScreen() {
                       />
                     </View>
                     <Text accessibilityRole="header" style={styles.answerTitle}>
-                      {busy === "speak" ? "Preparing your spoken answer" : "Answer ready"}
+                      {busy === "speak"
+                        ? "Preparing your spoken answer"
+                        : "Answer ready"}
                     </Text>
                     <Text accessibilityRole="text" style={styles.answerBody}>
                       {answer}
@@ -514,11 +550,7 @@ export default function HomeScreen() {
                       {busy === "speak" ? (
                         <ActivityIndicator color={colors.white} size="small" />
                       ) : (
-                        <Ionicons
-                          name="play"
-                          size={20}
-                          color={colors.white}
-                        />
+                        <Ionicons name="play" size={20} color={colors.white} />
                       )}
                       <Text style={styles.listenButtonText}>Listen again</Text>
                     </Pressable>

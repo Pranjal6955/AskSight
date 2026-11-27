@@ -46,7 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const refreshPromise = (async () => {
       const refreshToken = await getRefreshToken();
       if (!refreshToken) {
-        throw new api.ApiError("Your session ended. Please sign in again.", 401);
+        throw new api.ApiError(
+          "Your session ended. Please sign in again.",
+          401,
+        );
       }
       try {
         const tokens = await api.refresh(refreshToken);
@@ -90,7 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         return await operation(token);
       } catch (cause) {
-        if (!(cause instanceof api.ApiError) || cause.status !== 401) throw cause;
+        if (!(cause instanceof api.ApiError) || cause.status !== 401)
+          throw cause;
         return operation(await refreshAccessToken());
       }
     },
@@ -135,25 +139,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshAccessToken, setAccessToken]);
 
-  const signIn = useCallback(async (credentials: Credentials) => {
-    const tokens = await api.login(credentials);
+  const signIn = useCallback(
+    async (credentials: Credentials) => {
+      const tokens = await api.login(credentials);
 
-    try {
-      await setRefreshToken(tokens.refresh_token);
-    } catch {
-      // A device that cannot persist the token can still use this session.
-    }
-    setAccessToken(tokens.access_token);
+      try {
+        await setRefreshToken(tokens.refresh_token);
+      } catch {
+        // A device that cannot persist the token can still use this session.
+      }
+      setAccessToken(tokens.access_token);
 
-    try {
-      const profile = await api.me(tokens.access_token);
-      setUser(profile);
-    } catch (cause) {
-      setAccessToken(null);
-      await clearRefreshToken();
-      throw cause;
-    }
-  }, [setAccessToken]);
+      try {
+        const profile = await api.me(tokens.access_token);
+        setUser(profile);
+      } catch (cause) {
+        setAccessToken(null);
+        await clearRefreshToken();
+        throw cause;
+      }
+    },
+    [setAccessToken],
+  );
 
   const signUp = useCallback(
     async (input: SignupInput) => {

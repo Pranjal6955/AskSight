@@ -1,5 +1,10 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useState, type ComponentProps, type ComponentRef, type Ref } from "react";
+import {
+  useState,
+  type ComponentProps,
+  type ComponentRef,
+  type Ref,
+} from "react";
 import {
   Pressable,
   StyleSheet,
