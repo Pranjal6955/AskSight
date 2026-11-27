@@ -7,15 +7,15 @@ from app.core import inference
 
 class AskRequest(BaseModel):
     image_id: str = Field(min_length=1, max_length=100)
-    question: str = Field(min_length=1, max_length=inference.MAX_QUESTION_CHARS)
+    question: str | None = Field(default=None, max_length=inference.MAX_QUESTION_CHARS)
 
     @field_validator("question")
     @classmethod
-    def question_must_not_be_blank(cls, value: str) -> str:
+    def normalize_question(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         stripped = value.strip()
-        if not stripped:
-            raise ValueError("question must not be blank")
-        return stripped
+        return stripped or None
 
 
 class AskResponse(BaseModel):

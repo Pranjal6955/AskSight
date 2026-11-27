@@ -179,7 +179,7 @@ def test_predict_question_mode():
     img = Image.fromarray(arr)
 
     output = assistive_model.predict(img, question="What does the label say?")
-    assert "#" not in output
+    assert "#" in output
     assert "Expire 12/26, 500mg" in output
 
 

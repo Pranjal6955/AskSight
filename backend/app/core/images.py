@@ -8,7 +8,7 @@ a file that is not an image at all is rejected.
 
 from io import BytesIO
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 # Caps decode memory: Pillow decodes to ~3 bytes per pixel, so a 10 MB file
@@ -54,7 +54,12 @@ def decode_image(data: bytes) -> tuple[Image.Image, str, int, int]:
     if fmt not in ALLOWED_FORMATS:
         raise ValueError("Only JPEG and PNG images are supported.")
 
-    return image, ALLOWED_FORMATS[fmt], image.width, image.height
+    # Phone cameras commonly store sensor pixels with an EXIF rotation tag.
+    # Apply it before inference so dimensions and model input reflect how the
+    # user actually framed the photo.
+    image = ImageOps.exif_transpose(image)
+    width, height = image.size
+    return image, ALLOWED_FORMATS[fmt], width, height
 
 
 def extension_for(mime_type: str) -> str:

@@ -7,9 +7,9 @@ Login / Sign up  ->  Home  ->  History
                         \->  Account
 ```
 
-Login and sign up are wired to the FastAPI backend. Camera capture, voice
-input, history data and the account preference rows are design placeholders
-for the next phase.
+Every request — accounts, image storage, questions, speech input/output, and
+history — goes to the FastAPI backend. The backend calls the Hugging Face Space
+for model inference.
 
 ## Run it
 
@@ -20,23 +20,32 @@ for the next phase.
    npm install
    ```
 
-2. Point the app at the backend. Copy `.env.example` to `.env` and set the
-   URL reachable from your device:
+2. Copy `.env.example` to `.env`. Leave `EXPO_PUBLIC_API_URL` empty for local
+   Expo development, or set it to the HTTPS URL of your deployed FastAPI
+   backend:
 
    ```bash
    cp .env.example .env
    ```
 
-   - Android emulator: `http://10.0.2.2:8000` (the default when unset)
-   - iOS simulator or web: `http://localhost:8000`
-   - Physical phone: `http://<your-computer-LAN-IP>:8000`
+3. Start the FastAPI backend first. Follow the setup in
+   [`backend/README.md`](../backend/README.md), and run it with
+   `--host 0.0.0.0 --port 8000` so a phone on the same Wi-Fi can reach it.
 
-3. Start the backend from `backend/` (see `backend/README.md`), then start
-   Expo:
+4. Start Expo and reload the app after changing `.env`:
 
    ```bash
-   npx expo start
+   npx expo start --clear
    ```
+
+For local device testing, keep the phone and development computer on the same
+Wi-Fi. Expo development builds discover the computer's host from the dev
+server; Android emulators use `10.0.2.2` when that host is unavailable.
+
+The FastAPI backend proxies image questions to the public Space at
+`https://pranjal7777-asksight.hf.space`; the app never calls the Space directly.
+Every answer is saved to history and every image is stored by the backend. See
+the [Space API schema](https://pranjal7777-asksight.hf.space/gradio_api/openapi.json).
 
 ## Auth behaviour
 

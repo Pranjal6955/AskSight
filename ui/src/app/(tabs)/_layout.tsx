@@ -1,88 +1,65 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { Tabs, usePathname } from "expo-router";
-import type { ComponentProps } from "react";
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  type GestureResponderEvent,
-} from "react-native";
+import { Tabs } from "expo-router";
+import { PlatformPressable } from "expo-router/build/react-navigation/elements/PlatformPressable";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { cardShadow, colors, radius } from "@/theme";
-
-type TabButtonProps = {
-  icon: ComponentProps<typeof Ionicons>["name"];
-  label: string;
-  focused: boolean;
-  onPress?: (event: GestureResponderEvent) => void;
-  accessibilityLabel?: string;
-  testID?: string;
-};
-
-function TabButton({
-  icon,
-  label,
-  focused,
-  onPress,
-  accessibilityLabel,
-  testID,
-}: TabButtonProps) {
-  return (
-    <Pressable
-      accessibilityRole="tab"
-      accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ selected: focused }}
-      testID={testID}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.tabButton,
-        focused && styles.tabButtonActive,
-        pressed && !focused && styles.tabButtonPressed,
-      ]}
-    >
-      <Ionicons
-        name={icon}
-        size={22}
-        color={focused ? colors.white : colors.muted}
-      />
-      <Text
-        style={[styles.tabLabel, focused && styles.tabLabelActive]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
+import { colors } from "@/theme";
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const pathname = usePathname();
-  const { width } = useWindowDimensions();
-  const barWidth = Math.min(width - 32, 520);
-
-  function isActive(route: string) {
-    return pathname === route || pathname.startsWith(`${route}/`);
-  }
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.muted,
+        tabBarActiveBackgroundColor: colors.accentSoft,
+        tabBarInactiveBackgroundColor: "transparent",
         tabBarHideOnKeyboard: true,
+        tabBarButton: ({ ref: _ref, style, ...buttonProps }) => (
+          <PlatformPressable
+            {...buttonProps}
+            style={[
+              style,
+              {
+                flex: 1,
+                height: "100%",
+                justifyContent: "center",
+                borderRadius: 22,
+              },
+            ]}
+          />
+        ),
+        tabBarLabelStyle: {
+          fontSize: 16,
+          lineHeight: 20,
+          fontWeight: "800",
+          marginBottom: 2,
+        },
+        tabBarItemStyle: {
+          marginHorizontal: 4,
+          marginVertical: 4,
+          borderRadius: 22,
+        },
+        tabBarStyle: {
+          position: "absolute",
+          left: 16,
+          right: 16,
+          bottom: Math.max(insets.bottom, 10),
+          height: 84,
+          paddingTop: 2,
+          paddingHorizontal: 6,
+          borderTopWidth: 0,
+          borderRadius: 28,
+          backgroundColor: colors.surface,
+          shadowColor: colors.ink,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.14,
+          shadowRadius: 14,
+          elevation: 12,
+        },
         sceneStyle: { backgroundColor: colors.canvas },
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            width: barWidth,
-            left: (width - barWidth) / 2,
-            bottom: Math.max(insets.bottom, 12),
-          },
-        ],
-        tabBarItemStyle: styles.tabItem,
       }}
     >
       <Tabs.Screen
@@ -90,12 +67,11 @@ export default function TabsLayout() {
         options={{
           title: "Home",
           tabBarAccessibilityLabel: "Home",
-          tabBarButton: (props) => (
-            <TabButton
-              {...props}
-              icon="home-outline"
-              label="Home"
-              focused={isActive("/home")}
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "home" : "home-outline"}
+              size={focused ? 28 : 25}
+              color={focused ? colors.primary : colors.muted}
             />
           ),
         }}
@@ -105,12 +81,11 @@ export default function TabsLayout() {
         options={{
           title: "History",
           tabBarAccessibilityLabel: "History",
-          tabBarButton: (props) => (
-            <TabButton
-              {...props}
-              icon="time-outline"
-              label="History"
-              focused={isActive("/history")}
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "time" : "time-outline"}
+              size={focused ? 28 : 25}
+              color={focused ? colors.primary : colors.muted}
             />
           ),
         }}
@@ -120,12 +95,11 @@ export default function TabsLayout() {
         options={{
           title: "Account",
           tabBarAccessibilityLabel: "Account",
-          tabBarButton: (props) => (
-            <TabButton
-              {...props}
-              icon="person-outline"
-              label="Account"
-              focused={isActive("/account")}
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? "person" : "person-outline"}
+              size={focused ? 28 : 25}
+              color={focused ? colors.primary : colors.muted}
             />
           ),
         }}
@@ -133,46 +107,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    position: "absolute",
-    height: 72,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    borderTopWidth: 0,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    ...cardShadow,
-  },
-  tabItem: {
-    borderRadius: radius.pill,
-    overflow: "hidden",
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
-    borderRadius: radius.pill,
-    marginVertical: 2,
-    marginHorizontal: 2,
-  },
-  tabButtonActive: {
-    backgroundColor: colors.primary,
-  },
-  tabButtonPressed: {
-    backgroundColor: colors.surfaceMuted,
-  },
-  tabLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: "700",
-  },
-  tabLabelActive: {
-    color: colors.white,
-  },
-});

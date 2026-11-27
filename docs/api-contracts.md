@@ -103,7 +103,7 @@ report with a server log line.
 | Thing | Limit | Enforced |
 |---|---|---|
 | Image upload | 10 MB, JPEG/PNG only | `POST /images` |
-| Question | 1–500 characters, non-blank | `POST /ask` |
+| Question | 0–500 characters, optional (blank = Describe Mode) | `POST /ask` |
 | Audio upload | 15 MB | `POST /stt` |
 | TTS text | 1–2000 characters | `POST /tts` |
 | Page size | 1–50, default 20 | `GET /history` |
@@ -387,7 +387,8 @@ timed out. **503** — no API key configured.
 
 Generated speech is returned as bytes, not base64 inside JSON — a base64
 payload would inflate it by a third and force the whole clip through memory.
-Speech is not stored on the server; it is generated per request and discarded.
+Speech is generated at 1.2x pace (the provider default sounds slow for short
+answers) and is not stored on the server; it is discarded after the response.
 
 ---
 
@@ -404,7 +405,7 @@ Speech is not stored on the server; it is generated per request and discarded.
 | Field | Rules |
 |---|---|
 | `image_id` | required, 1–100 characters. An image owned by the caller |
-| `question` | required, 1–500 characters, non-blank (trimmed) |
+| `question` | optional, up to 500 characters. Omit it or send blank text to use Describe Mode; non-blank text is trimmed and sent as a question. |
 
 **200**
 
@@ -423,7 +424,7 @@ The `request_id` of every response, including this one, is in the
 **401** — not authenticated. **404** — unknown `image_id` or owned by another
 user (identical bodies, so ids cannot be probed); also **404**
 `"This image is no longer available. Please upload it again."` when the stored
-bytes are gone. **422** — blank or oversized question, or the model rejected
+bytes are gone. **422** — oversized question, or the model rejected
 the input (a sentence from the model path). **500** — the answer was produced
 but could not be saved to history (`"The answer could not be saved to
 history."`). **503** — the inference service is unavailable

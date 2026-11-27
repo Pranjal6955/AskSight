@@ -8,7 +8,7 @@ Verified against docs.sarvam.ai (Nov 2026):
   STT  POST https://api.sarvam.ai/speech-to-text   multipart {file, model}
        -> 200 {transcript, language_code}
   TTS  POST https://api.sarvam.ai/text-to-speech   JSON {text, language_code,
-       model, output_audio_codec, speaker?} -> 200 {audios: [base64]}
+       model, output_audio_codec, pace, speaker?} -> 200 {audios: [base64]}
 """
 
 import base64
@@ -24,6 +24,7 @@ REQUEST_TIMEOUT_SECONDS = 30.0
 MAX_AUDIO_BYTES = 15 * 1024 * 1024
 DEFAULT_STT_MODEL = "saaras:v4"
 DEFAULT_TTS_MODEL = "bulbul:v4-flash"
+DEFAULT_TTS_PACE = 1.2  # provider default reads too slowly for short answers
 
 
 class SpeechTimeout(Exception):
@@ -102,6 +103,7 @@ class SarvamSpeechService:
             "language_code": language,
             "model": self.tts_model,
             "output_audio_codec": "mp3",
+            "pace": DEFAULT_TTS_PACE,
         }
         if voice:
             payload["speaker"] = voice

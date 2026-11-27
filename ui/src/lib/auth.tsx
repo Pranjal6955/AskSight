@@ -109,16 +109,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        const tokens = await api.refresh(refreshToken);
-        try {
-          await setRefreshToken(tokens.refresh_token);
-        } catch {
-          // The session still works in memory; the next cold start may ask
-          // the user to sign in again.
-        }
-
-        if (active) setAccessToken(tokens.access_token);
-        const profile = await api.me(tokens.access_token);
+        // Share the promise with withAuth so the single-use refresh token is
+        // never rotated twice (e.g. StrictMode's double effect invocation).
+        const accessToken = await refreshAccessToken();
+        const profile = await api.me(accessToken);
         if (active) setUser(profile);
       } catch (cause) {
         // Only a rejected token means the session is gone. A network failure
@@ -139,7 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       active = false;
     };
-  }, [setAccessToken]);
+  }, [refreshAccessToken, setAccessToken]);
 
   const signIn = useCallback(async (credentials: Credentials) => {
     const tokens = await api.login(credentials);

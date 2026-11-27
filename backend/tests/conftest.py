@@ -9,3 +9,4 @@ Tests that exercise checkpoint loading set the variable explicitly.
 import os
 
 os.environ["ASKSIGHT_MODEL_CHECKPOINT"] = ""
+os.environ["ASKSIGHT_HF_SPACE_URL"] = ""

@@ -49,4 +49,4 @@ export const cardShadow = Platform.select({
   },
 });
 
-export const tabBarSpace = 92;
+export const tabBarSpace = 96;

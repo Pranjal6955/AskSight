@@ -144,20 +144,19 @@ class TestAsk(AskApiTestCase):
             res.json()["detail"], "This image is no longer available. Please upload it again."
         )
 
-    def test_rejects_blank_question_with_422(self):
-        self.assertEqual(self.ask(self.upload(), question="   ").status_code, 422)
+    def test_blank_question_uses_describe_mode(self):
+        res = self.ask(self.upload(), question="   ")
+        self.assertEqual(res.status_code, 200)
+        self.assertIsNone(self.service.calls[0][1])
 
     def test_rejects_too_long_question_with_422(self):
         res = self.ask(self.upload(), question="a" * (inference.MAX_QUESTION_CHARS + 1))
         self.assertEqual(res.status_code, 422)
 
-    def test_rejects_missing_fields_with_422(self):
+    def test_rejects_missing_image_id_with_422(self):
         headers = self.auth_header()
         self.assertEqual(
             self.client.post("/ask", json={"question": "hi"}, headers=headers).status_code, 422
-        )
-        self.assertEqual(
-            self.client.post("/ask", json={"image_id": "x"}, headers=headers).status_code, 422
         )
 
     def test_model_unavailable_is_503(self):
@@ -173,6 +172,12 @@ class TestAsk(AskApiTestCase):
         self.assertEqual(res.status_code, 503)
         self.assertEqual(res.json()["detail"], ask_module.MODEL_UNAVAILABLE)
         self.assertIn("checkpoint missing", "\n".join(logs.output))
+
+    def test_remote_inference_failure_is_503(self):
+        self.service.error = inference.InferenceUnavailable("space down")
+        res = self.ask(self.upload())
+        self.assertEqual(res.status_code, 503)
+        self.assertEqual(res.json()["detail"], ask_module.MODEL_UNAVAILABLE)
 
     def test_slow_model_is_504(self):
         self.service.delay = 0.2

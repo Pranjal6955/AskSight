@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from app.api.images import GONE, owned_image
 from app.core import images as image_checks
 from app.core.dependencies import get_current_user
-from app.core.inference import get_inference_service
+from app.core.inference import InferenceUnavailable, get_inference_service
 from app.core.middleware import get_request_id
 from app.core.rate_limit import per_user
 from app.core.storage import get_storage
@@ -74,6 +74,13 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail=ASK_TOO_SLOW
         ) from exc
+    except InferenceUnavailable as exc:
+        logger.error(
+            "inference_failed request_id=%s error=%s", get_request_id(), exc
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=MODEL_UNAVAILABLE
+        ) from exc
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
@@ -87,7 +94,9 @@ async def ask(payload: AskRequest, current_user=Depends(get_current_user)):
             data={
                 "ownerId": current_user.id,
                 "imageId": record.id,
-                "question": payload.question,
+                # Keep Describe Mode legible in history despite the required
+                # question column in the database.
+                "question": payload.question or "Describe this photo.",
                 "answer": answer,
                 "modelVersion": model_version,
             }

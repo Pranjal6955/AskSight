@@ -35,26 +35,42 @@ QUESTION_MODE_SYSTEM_PROMPT: Final[str] = (
     "unless reading a longer document."
 )
 
-# Generation hyperparameters for deterministic, low-hallucination responses
+# Greedy decoding is deterministic; keep generation bounded while allowing
+# answers that read a longer document instead of silently cutting off at 160 tokens.
 GENERATION_KWARGS: Final[dict] = {
-    "temperature": 0.2,
-    "top_p": 0.8,
-    "max_new_tokens": 160,
+    "do_sample": False,
+    "max_new_tokens": 1024,
 }
 
 
 def clean_tts_text(text: str) -> str:
-    """Strip Markdown formatting (*, #, bullet symbols, backticks) for TTS."""
+    """Remove common Markdown wrappers without changing literal symbols or line breaks."""
     if not text:
         return ""
 
     cleaned = text
-    cleaned = re.sub(r"#+\s*", "", cleaned)
-    cleaned = re.sub(r"[\*_]+", "", cleaned)
-    cleaned = re.sub(r"^\s*[-*•]\s*", "", cleaned, flags=re.MULTILINE)
-    cleaned = re.sub(r"`+", "", cleaned)
+    cleaned = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+", "", cleaned)
+    cleaned = re.sub(r"(?m)^[ \t]*[-*•][ \t]+", "", cleaned)
     cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(
+        r"(?<![\w])\*\*(\S(?:.*?\S)?)\*\*(?![\w])",
+        r"\1",
+        cleaned,
+        flags=re.DOTALL,
+    )
+    cleaned = re.sub(
+        r"(?<![\w])__(\S(?:.*?\S)?)__(?![\w])",
+        r"\1",
+        cleaned,
+        flags=re.DOTALL,
+    )
+    cleaned = re.sub(r"(?<!\w)\*(\S[^*\n]*?\S)\*(?!\w)", r"\1", cleaned)
+    cleaned = re.sub(r"(?<!\w)_(\S[^_\n]*?\S)_(?!\w)", r"\1", cleaned)
+    cleaned = re.sub(r"`([^`\n]+)`", r"\1", cleaned)
+    cleaned = cleaned.replace("`", "")
+    cleaned = re.sub(r"[ \t]+", " ", cleaned)
+    cleaned = re.sub(r" *\n *", "\n", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
 

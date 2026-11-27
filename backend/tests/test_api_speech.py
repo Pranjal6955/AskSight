@@ -239,6 +239,7 @@ class TestSarvamService(unittest.TestCase):
             body = request.read()
             self.assertIn(b'"output_audio_codec":"mp3"', body)
             self.assertIn(b'"language_code":"hi-IN"', body)
+            self.assertIn(b'"pace":1.2', body)
             return httpx.Response(200, json={"request_id": "r2", "audios": [payload]})
 
         audio = self.make(handler).synthesize("नमस्ते", "hi-IN", None)

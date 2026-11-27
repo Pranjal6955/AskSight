@@ -12,12 +12,13 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import torch
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
-from PIL import Image
+from PIL import Image, ImageOps
 from torch.utils.data import Dataset
 from transformers import (
     AutoProcessor,
@@ -63,28 +64,76 @@ class AssistiveMultimodalDataset(Dataset):
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
         item = self.samples[idx]
-        image_path = item.get("image_path")
-        if isinstance(image_path, str) and Path(image_path).exists():
-            image = Image.open(image_path).convert("RGB")
+        image_value = item.get("image_path") or item.get("image")
+        if isinstance(image_value, dict):
+            image_value = image_value.get("path") or image_value.get("image_path")
+        if isinstance(image_value, Image.Image):
+            image = ImageOps.exif_transpose(image_value).convert("RGB")
+        elif isinstance(image_value, str) and image_value.strip():
+            image_path = Path(image_value).expanduser()
+            if not image_path.is_file():
+                raise ValueError(f"sample {idx}: image file does not exist: {image_path}")
+            try:
+                with Image.open(image_path) as opened:
+                    image = ImageOps.exif_transpose(opened).convert("RGB")
+            except OSError as exc:
+                raise ValueError(f"sample {idx}: could not read image: {image_path}") from exc
         else:
-            image = item.get("image")
-            if image is None:
-                image = Image.new("RGB", (224, 224), color=(128, 128, 128))
+            raise ValueError(
+                f"sample {idx}: expected an existing image_path or image file path; "
+                "refusing to train on a placeholder image"
+            )
 
-        question = item.get("question", "")
-        answer = item.get("answer", "")
-        is_unanswerable = item.get("unanswerable", False)
-        if is_unanswerable and not answer:
+        question_value = item.get("question", "")
+        if question_value is None:
+            question_value = ""
+        if not isinstance(question_value, str):
+            raise ValueError(f"sample {idx}: question must be a string")
+        question = question_value.strip()
+
+        answer_value = item.get("answer")
+        if answer_value is None:
+            answer_value = item.get("answers")
+        if isinstance(answer_value, list):
+            answer_candidates = [
+                value.get("answer") if isinstance(value, dict) else value
+                for value in answer_value
+            ]
+            answer_candidates = [
+                value.strip()
+                for value in answer_candidates
+                if isinstance(value, str) and value.strip()
+            ]
+            answer = Counter(answer_candidates).most_common(1)[0][0] if answer_candidates else ""
+        elif isinstance(answer_value, str):
+            answer = answer_value.strip()
+        else:
+            answer = ""
+
+        answer_type = str(item.get("answer_type", "")).strip().lower()
+        answerable_value = item.get("answerable")
+        is_unanswerable = (
+            item.get("unanswerable") is True
+            or answerable_value is False
+            or answerable_value == 0
+            or answer_type in {"unanswerable", "unanswerable answer"}
+            or answer.strip().lower() == "unanswerable"
+        )
+        if is_unanswerable:
             answer = (
                 "The image is unclear or cut off. Please adjust the camera angle and try again."
             )
+        if not answer:
+            raise ValueError(
+                f"sample {idx}: no non-empty answer or unanswerable marker was provided"
+            )
 
-        is_describe = not question or question.strip().lower() in [
+        is_describe = not question or question.lower() in [
             "describe",
             "describe this photo.",
         ]
         system_prompt = DESCRIBE_MODE_SYSTEM_PROMPT if is_describe else QUESTION_MODE_SYSTEM_PROMPT
-        user_query = "Describe this photo." if is_describe else question.strip()
+        user_query = "Describe this photo." if is_describe else question
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -101,7 +150,9 @@ class AssistiveMultimodalDataset(Dataset):
             },
         ]
 
-        text = self.processor.apply_chat_template(messages, tokenize=False)
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=False
+        )
         inputs = self.processor(
             text=[text],
             images=[image],
@@ -109,10 +160,72 @@ class AssistiveMultimodalDataset(Dataset):
             padding=True,
         )
 
-        sample_inputs = {k: v[0] for k, v in inputs.items()}
+        prompt_text = self.processor.apply_chat_template(
+            messages[:-1], tokenize=False, add_generation_prompt=True
+        )
+        prompt_inputs = self.processor(
+            text=[prompt_text],
+            images=[image],
+            return_tensors="pt",
+        )
+
+        # Qwen3-VL flattens an image's patches into pixel_values. Only the
+        # token tensors have a leading batch dimension of one; indexing every
+        # tensor at [0] would silently discard all but the first image patch.
+        sample_inputs: dict[str, torch.Tensor] = {}
+        for key, value in inputs.items():
+            if key in {"input_ids", "attention_mask", "token_type_ids"}:
+                sample_inputs[key] = value[0]
+            else:
+                sample_inputs[key] = value
+
         labels = sample_inputs["input_ids"].clone()
+        prompt_length = prompt_inputs["input_ids"].shape[1]
+        if prompt_length > labels.shape[0]:
+            raise ValueError(f"sample {idx}: prompt tokens exceed full conversation tokens")
+        labels[:prompt_length] = -100
         sample_inputs["labels"] = labels
         return sample_inputs
+
+
+class Qwen3VLCollator:
+    """Pad text targets and concatenate Qwen3-VL's flattened image patches."""
+
+    def __init__(self, processor: AutoProcessor) -> None:
+        self.pad_token_id = processor.tokenizer.pad_token_id
+        if self.pad_token_id is None:
+            self.pad_token_id = processor.tokenizer.eos_token_id
+        if self.pad_token_id is None:
+            raise ValueError("the tokenizer must define a pad_token_id or eos_token_id")
+
+    def __call__(self, features: list[dict[str, torch.Tensor]]) -> dict[str, torch.Tensor]:
+        max_length = max(feature["input_ids"].shape[0] for feature in features)
+        batch_size = len(features)
+        input_ids = torch.full(
+            (batch_size, max_length), self.pad_token_id, dtype=features[0]["input_ids"].dtype
+        )
+        attention_mask = torch.zeros((batch_size, max_length), dtype=torch.long)
+        labels = torch.full((batch_size, max_length), -100, dtype=features[0]["labels"].dtype)
+
+        for row, feature in enumerate(features):
+            length = feature["input_ids"].shape[0]
+            input_ids[row, :length] = feature["input_ids"]
+            attention_mask[row, :length] = feature.get(
+                "attention_mask", torch.ones(length, dtype=torch.long)
+            )
+            labels[row, :length] = feature["labels"]
+
+        batch: dict[str, torch.Tensor] = {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+        for key in ("pixel_values", "image_grid_thw"):
+            values = [feature[key] for feature in features if key in feature]
+            if len(values) != batch_size:
+                raise ValueError(f"every multimodal sample must include {key}")
+            batch[key] = torch.cat(values, dim=0)
+        return batch
 
 
 def build_lora_config(
@@ -144,16 +257,18 @@ def setup_model_and_lora(
         max_pixels=1024 * 32 * 32,
     )
 
+    use_bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+    compute_dtype = torch.bfloat16 if use_bf16 else torch.float16
     quantization_config = None
     if load_in_4bit and torch.cuda.is_available():
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=compute_dtype,
         )
 
     load_kwargs = {
-        "torch_dtype": torch.bfloat16,
+        "torch_dtype": compute_dtype if torch.cuda.is_available() else torch.float32,
         "device_map": "auto" if torch.cuda.is_available() else None,
     }
     if quantization_config is not None:
@@ -193,20 +308,24 @@ def train_qlora(
     lr: float = 2e-4,
 ) -> None:
     """Run QLoRA training loop."""
-    model, processor = setup_model_and_lora(model_id=model_id, load_in_4bit=True)
+    if epochs < 1 or batch_size < 1 or gradient_accumulation_steps < 1:
+        raise ValueError("epochs, batch_size, and gradient_accumulation_steps must be positive")
+
     samples: list[dict] = []
 
     def _read_data(path_str: str | None, tag: str):
         if not path_str:
             return
         p = Path(path_str)
-        if not p.exists():
-            return
+        if not p.is_file():
+            raise FileNotFoundError(f"{tag} dataset file does not exist: {p}")
         if p.suffix == ".jsonl":
             with open(p, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         item = json.loads(line)
+                        if not isinstance(item, dict):
+                            raise ValueError(f"{p}: each JSONL row must be an object")
                         item["source"] = tag
                         samples.append(item)
         elif p.suffix == ".json":
@@ -214,8 +333,14 @@ def train_qlora(
                 content = json.load(f)
                 if isinstance(content, list):
                     for item in content:
+                        if not isinstance(item, dict):
+                            raise ValueError(f"{p}: each dataset row must be an object")
                         item["source"] = tag
                         samples.append(item)
+                else:
+                    raise ValueError(f"{p}: expected a JSON array or JSONL file")
+        else:
+            raise ValueError(f"{p}: dataset must use .json or .jsonl")
 
     _read_data(vizwiz_path, "vizwiz")
     _read_data(textvqa_path, "textvqa")
@@ -225,14 +350,20 @@ def train_qlora(
         logger.warning("No dataset samples loaded; provide --vizwiz, --textvqa, or --docvqa paths.")
         return
 
+    if not torch.cuda.is_available():
+        raise RuntimeError("QLoRA training requires a CUDA GPU; CPU training cannot fit this model")
+
+    model, processor = setup_model_and_lora(model_id=model_id, load_in_4bit=True)
     train_dataset = AssistiveMultimodalDataset(samples, processor)
+    use_bf16 = torch.cuda.is_bf16_supported()
     training_args = TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=epochs,
         per_device_train_batch_size=batch_size,
         gradient_accumulation_steps=gradient_accumulation_steps,
         learning_rate=lr,
-        bf16=True,
+        bf16=use_bf16,
+        fp16=not use_bf16,
         logging_steps=10,
         save_strategy="epoch",
         dataloader_num_workers=2,
@@ -242,6 +373,7 @@ def train_qlora(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
+        data_collator=Qwen3VLCollator(processor),
     )
     trainer.train()
     model.save_pretrained(output_dir)

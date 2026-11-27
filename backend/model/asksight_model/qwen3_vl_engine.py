@@ -72,17 +72,25 @@ class Qwen3VLAssistiveModel:
         if model is not None:
             self.model = model
         else:
+            has_cuda = torch.cuda.is_available()
+            use_bf16 = has_cuda and torch.cuda.is_bf16_supported()
+            if not has_cuda:
+                compute_dtype = torch.float32
+            elif use_bf16:
+                compute_dtype = torch.bfloat16
+            else:
+                compute_dtype = torch.float16
             quantization_config = None
-            if self.load_in_4bit and torch.cuda.is_available():
+            if self.load_in_4bit and has_cuda:
                 quantization_config = BitsAndBytesConfig(
                     load_in_4bit=True,
                     bnb_4bit_quant_type="nf4",
-                    bnb_4bit_compute_dtype=torch.bfloat16,
+                    bnb_4bit_compute_dtype=compute_dtype,
                 )
 
             load_kwargs = {
-                "torch_dtype": torch.bfloat16,
-                "device_map": "auto" if torch.cuda.is_available() else None,
+                "torch_dtype": compute_dtype,
+                "device_map": "auto" if has_cuda else None,
             }
             if quantization_config is not None:
                 load_kwargs["quantization_config"] = quantization_config
@@ -92,7 +100,7 @@ class Qwen3VLAssistiveModel:
                 **load_kwargs,
             )
 
-            if not torch.cuda.is_available():
+            if not has_cuda:
                 self.model.to(self.device)
 
         if adapter_dir is not None:

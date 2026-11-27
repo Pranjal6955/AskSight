@@ -52,8 +52,22 @@ AskSight/
 ├── backend/          # FastAPI app, Prisma schema, tests
 │   └── model/        # Training code and inference service
 ├── ui/               # Expo mobile app
+├── web/              # Standalone React admin website
 ├── docs/             # API contract and deployment guide
 ```
+
+## Standalone web app
+
+The browser app is a separate Vite + React project in `web/`; it does not run inside the Expo mobile client.
+
+```bash
+cd web
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Set `VITE_API_URL` in `web/.env` to the FastAPI server for accounts and speech. Image Q&A uses the AskSight Hugging Face Space configured by `VITE_HF_SPACE_URL`. The site includes sign-in/sign-up, speech-to-text recording, and text-to-speech playback.
 
 ## Status
 
