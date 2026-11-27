@@ -1,26 +1,84 @@
+"""FastAPI application factory for the AskSight backend."""
+
+import asyncio
+import logging
+import os
 from contextlib import asynccontextmanager
 
-# pyrefly: ignore [missing-import]
-from fastapi import FastAPI
+from dotenv import load_dotenv
 
-from app.db.prisma import prisma
+load_dotenv()
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from app.api import ask, auth, health, history, images, metrics, speech  # noqa: E402
+from app.core.inference import get_inference_service  # noqa: E402
+from app.core.middleware import RequestContextMiddleware, setup_logging  # noqa: E402
+from app.db import db  # noqa: E402
+
+logger = logging.getLogger("asksight.startup")
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    await prisma.connect()
+async def lifespan(_: FastAPI):
+    await db.connect()
+    try:
+        # Load once at startup so the first /ask does not pay the cold start.
+        # Off the event loop: a multi-GB model load must not block live requests.
+        await asyncio.to_thread(get_inference_service)
+    except Exception:
+        # Auth, images and history stay up; /ask returns 503 and readiness
+        # reports the model as unavailable until the checkpoint is fixed.
+        logger.exception("inference_service_startup_failed")
     yield
-    if prisma.is_connected():
-        await prisma.disconnect()
+    await db.disconnect()
 
 
-app = FastAPI(
-    title="AskSight Backend",
-    version="1.0",
-    lifespan=lifespan,
-)
+def _cors_origins() -> list[str]:
+    """Browser origins allowed to call the API (Expo web in development).
+
+    Bearer tokens, not cookies, authenticate requests, so the wildcard default
+    is safe for local development. Set explicit origins in production.
+    """
+    raw = os.getenv("CORS_ORIGINS", "*")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
-@app.get("/health")
-async def health():
-    return {"status": "ok"}
+def create_app() -> FastAPI:
+    setup_logging()
+    application = FastAPI(
+        title="AskSight API",
+        description=(
+            "Backend for AskSight: image upload, vision-question answering, and history. "
+            "All endpoints except /auth/signup, /auth/login and /health/* require a "
+            "Bearer access token."
+        ),
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+
+    # Outside the router dependencies, so even 401/404 responses carry the id.
+    application.add_middleware(RequestContextMiddleware)
+    # Outermost, so browser preflights and error responses get CORS headers too.
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins(),
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["X-Request-ID"],
+    )
+
+    application.include_router(health.router)
+    application.include_router(metrics.router)
+    application.include_router(auth.router)
+    application.include_router(images.router)
+    application.include_router(ask.router)
+    application.include_router(history.router)
+    application.include_router(speech.router)
+
+    return application
+
+
+app = create_app()

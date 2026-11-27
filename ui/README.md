@@ -1,56 +1,69 @@
-# Welcome to your Expo app 👋
+# AskSight mobile app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Expo + React Native client for AskSight. The visual flow is:
 
-## Get started
+```
+Login / Sign up  ->  Home  ->  History
+                        \->  Account
+```
 
-1. Install dependencies
+Every request — accounts, image storage, questions, speech input/output, and
+history — goes to the FastAPI backend. The backend calls the Hugging Face Space
+for model inference.
+
+## Run it
+
+1. Install dependencies:
 
    ```bash
+   cd ui
    npm install
    ```
 
-2. Start the app
+2. Copy `.env.example` to `.env`. Leave `EXPO_PUBLIC_API_URL` empty for local
+   Expo development, or set it to the HTTPS URL of your deployed FastAPI
+   backend:
 
    ```bash
-   npx expo start
+   cp .env.example .env
    ```
 
-In the output, you'll find options to open the app in a
+3. Start the FastAPI backend first. Follow the setup in
+   [`backend/README.md`](../backend/README.md), and run it with
+   `--host 0.0.0.0 --port 8000` so a phone on the same Wi-Fi can reach it.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+4. Start Expo and reload the app after changing `.env`:
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   ```bash
+   npx expo start --clear
+   ```
 
-## Get a fresh project
+For local device testing, keep the phone and development computer on the same
+Wi-Fi. Expo development builds discover the computer's host from the dev
+server; Android emulators use `10.0.2.2` when that host is unavailable.
 
-When you're ready, run:
+The FastAPI backend proxies image questions to the public Space at
+`https://pranjal7777-asksight.hf.space`; the app never calls the Space directly.
+Every answer is saved to history and every image is stored by the backend. See
+the [Space API schema](https://pranjal7777-asksight.hf.space/gradio_api/openapi.json).
+
+## Auth behaviour
+
+- `POST /auth/signup` creates the account, then the app signs in with the same
+  credentials and lands on Home.
+- `POST /auth/login` stores the refresh token in secure storage (localStorage
+  on web) and loads the profile from `GET /auth/me`.
+- On a cold start the stored refresh token is rotated through
+  `POST /auth/refresh`, so a returning user goes straight to Home.
+- Sign out clears the local session and revokes the refresh token.
+
+## Checks
 
 ```bash
-npm run reset-project
+npm run lint
+npm run format:check
+npx tsc --noEmit
+npx expo export --platform web
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Run `npm run format` to apply Prettier formatting.

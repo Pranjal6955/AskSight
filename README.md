@@ -27,6 +27,16 @@ Point your camera at a menu, a label, a sign, or anything else — ask a questio
 | AI/ML | PyTorch + Hugging Face Transformers + CLIP + bitsandbytes |
 | Database | PostgreSQL |
 
+## Training
+
+The model lives in `backend/model/` and is trained in two ways — same code, different scale:
+
+- **Smoke run (any laptop, CPU, ~10 min)** — verifies dataset → training → checkpoint end to end:
+  `python -m asksight_model.train --config configs/default.yaml --device cpu --limit 100 --version v0.1-smoke`
+- **Full run (Colab or Kaggle GPU)** — the notebook defaults to 20,000 VQA questions; 50,000 is configurable. Add optional image/question/answer examples for photo descriptions using its custom examples cell. Runtime depends on the available GPU, and free notebook sessions can end before larger runs finish.
+
+Expected outputs for both, plus serving instructions, are documented in [`backend/model/README.md`](backend/model/README.md#training-runs). Point the backend at a checkpoint with `ASKSIGHT_MODEL_CHECKPOINT=<dir>`.
+
 ## How It Works
 
 1. User captures/uploads an image and asks a question by voice.
@@ -38,12 +48,26 @@ Point your camera at a menu, a label, a sign, or anything else — ask a questio
 ## Project Structure
 
 ```
-accessibility-visual-assistant/
-├── backend/        # FastAPI app, ML services, tests
-├── frontend/       # React app (camera, voice, playback UI)
-├── ml/             # Training notebooks and scripts
-└── docker-compose.yml
+AskSight/
+├── backend/          # FastAPI app, Prisma schema, tests
+│   └── model/        # Training code and inference service
+├── ui/               # Expo mobile app
+├── web/              # Standalone React admin website
+├── docs/             # API contract and deployment guide
 ```
+
+## Standalone web app
+
+The browser app is a separate Vite + React project in `web/`; it does not run inside the Expo mobile client.
+
+```bash
+cd web
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Set `VITE_API_URL` in `web/.env` to the FastAPI server for accounts and speech. Image Q&A uses the AskSight Hugging Face Space configured by `VITE_HF_SPACE_URL`. The site includes sign-in/sign-up, speech-to-text recording, and text-to-speech playback.
 
 ## Status
 
