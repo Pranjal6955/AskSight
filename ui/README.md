@@ -21,12 +21,20 @@ for model inference.
    ```
 
 2. Copy `.env.example` to `.env`. Leave `EXPO_PUBLIC_API_URL` empty for local
-   Expo development, or set it to the HTTPS URL of your deployed FastAPI
-   backend:
+   Expo development, or set it to the current deployed test URL,
+   `http://16.178.144.118` (without a trailing slash):
 
    ```bash
    cp .env.example .env
    ```
+
+   This IP/HTTP endpoint is for testing only. Use a domain with HTTPS before
+   distributing the app so authentication tokens and images are encrypted in
+   transit. `EXPO_PUBLIC_API_URL` is embedded into the client bundle at build
+   time; set it in the build environment when creating a production build.
+   The temporary `withHttpApiAccess` Expo config plugin allows cleartext HTTP
+   in native Android and iOS builds. Remove the plugin from `app.json` and its
+   source file after switching to HTTPS, then make a new native build.
 
 3. Start the FastAPI backend first. Follow the setup in
    [`backend/README.md`](../backend/README.md), and run it with
